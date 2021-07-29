@@ -1,5 +1,5 @@
 # network-visibility
-Gain full network visibility on flat small or home networks (quickly, and without a span or tap)
+Gain full network visibility on flat home or small office networks (quickly, and without a span or tap)
 
 This is a write up of the excellent [No SPAN Port? No Tap? No Problem!](https://www.blackhillsinfosec.com/webcast-no-span-port-no-tap-no-problem/) webcast by [Black Hills Information Security](https://www.blackhillsinfosec.com/).
 
@@ -9,9 +9,9 @@ This is a write up of the excellent [No SPAN Port? No Tap? No Problem!](https://
 
 * Can capture host <==> host && host <==> gateway
 
-* Works on raspberry pi 4 core 64bit 8G RAM (low hardware requirements)
+* Works on Raspberry Pi 4 Core, 64bit, 8G RAM (low hardware requirements)
 
-* Stores metadata about the traffic rather than full packet capture (low storage requirements)
+* Can store metadata about the traffic rather than full packet capture (low storage requirements)
 
 ## Install Ubuntu 18.04 (choose desktop or server)
 
