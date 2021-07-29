@@ -9,7 +9,7 @@ This is a write up of the excellent [No SPAN Port? No Tap? No Problem!](https://
 
 * Can capture host <==> host && host <==> gateway
 
-* Works on Raspberry Pi 4 Core, 64bit, 8G RAM (low hardware requirements)
+* Works on Raspberry Pi 4, 64bit, 8G RAM (low hardware requirements)
 
 * Can store metadata about the traffic rather than full packet capture (low storage requirements)
 
