@@ -143,7 +143,7 @@ sudo sed -i 's/^set api.rest.username user$/set api.rest.username '$(gpg --gen-r
 cat /usr/local/share/bettercap/caplets/https-ui.cap
 ```
 
-For a local desktop instance, access the web ui by entering `http://127.0.0.1:80` into your browser
+For a local desktop instance, access the web-ui by entering `http://127.0.0.1:80` into your browser
 
 To reach a remote instance on the same network, browse to `https://<bettercap-device-ip>`
 
@@ -248,7 +248,7 @@ Update bettercap's caplets and web-ui from the latest on github:
 sudo bettercap -eval "caplets.update; ui.update; q"
 ```
 
-From here the `>>` commands work **both** over a CLI bettercap interactive session, or in the command bar on the WebUI (noted as >_ at the top of the UI)
+From here the `>>` commands work **both** over a CLI bettercap interactive session, or in the command bar on the web-ui (noted as >_ at the top of the UI)
 
 
 * Enable events logging, show all events, then only show the most recent 2 events
@@ -333,7 +333,7 @@ Putting it all together:
 ```bash
 # start bettercap with http web-ui
 sudo bettercap -caplet http-ui
-# either via ssh or in the web-ui cmd bar:
+# either via bettercap interactive CLI over ssh or in the web-ui cmd bar:
 >> net.recon on
 >> net.probe on
 >> arp.spoof on
