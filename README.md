@@ -98,7 +98,7 @@ sudo apt install -y libpcap-dev net-tools
 find / -type f -name "libpcap.so" 2>/dev/null
 
 # note location of libpcap.so if yours is different than the following location:
-sudo ln -s '/usr/lib/x86 64-linux-gnu/libpcacp.so' '/usr/lib/x86\ 64-linux-gnu/libpcacp.so.1'
+sudo ln -s '/usr/lib/x86_64-linux-gnu/libpcacp.so' '/usr/lib/x86_64-linux-gnu/libpcacp.so.1'
 ```
 
 * If you see the error 'libnetfilter_queue.so.1 is not available":
