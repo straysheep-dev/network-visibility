@@ -77,7 +77,9 @@ sha256sum -c bettercap_linux_amd64_v2.31.1.sha256
 
 # if 'bettercap: OK' add it to your path:
 
-chmod 750 bettercap
+chmod 755 bettercap
+sudo chown root bettercap
+sudo chgrp root bettercap
 sudo mv bettercap -t /usr/local/bin/
 
 # run bettercap
