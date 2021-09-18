@@ -26,10 +26,10 @@ curl -LfO 'https://releases.ubuntu.com/18.04/SHA256SUMS'
 curl -LfO 'https://releases.ubuntu.com/18.04/SHA256SUMS.gpg'
 
 # Server:
-curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.5-live-server-amd64.iso'
+curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.6-live-server-amd64.iso'
 
 # Desktop:
-curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.5-desktop-amd64.iso'
+curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.6-desktop-amd64.iso'
 
 gpg --keyid-format long --keyserver hkps://keyserver.ubuntu.com:443 --recv-keys '843938DF228D22F7B3742BC0D94AA3F0EFE21092'
 gpg --verify --keyid-format long SHA256SUMS.gpg SHA256SUMS
@@ -45,7 +45,8 @@ Remember that upgrading ubuntu 18.04 => 20.04 during install may break monogdb a
 ## Install RITA / ZEEK
 
 ```bash
-curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.3.0/install.sh' > rita-install.sh
+# Check for the latest version: https://github.com/activecm/rita/releases/latest
+curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-install.sh
 chmod +x rita-install.sh
 sudo ./rita-install.sh
 
