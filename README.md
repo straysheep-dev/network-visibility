@@ -13,6 +13,21 @@ This is a write up of the excellent [No SPAN Port? No Tap? No Problem!](https://
 
 * Can store metadata about the traffic rather than full packet capture (low storage requirements)
 
+A [setup script](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh) has been added to automate the steps below.
+
+The goal was to be able to curl RITA's installer, then simply curl one more that handles everything else required for setup and removal.
+
+## Contents
+- [Install Ubuntu 18.04](#install-ubuntu-1804-choose-desktop-or-server)
+- [Install RITA / Zeek](#install-rita--zeek)
+- [Installing Bettercap from Pre-compiled Binaries (GitHub)](#installing-bettercap-from-pre-compiled-binaries-github)
+- [Resolving Errors](#resolving-errors)
+- [Using the Web-UI](#using-the-web-ui)
+- [Arp Poisoning (Antidoting?) the Network](#arp-poisoning-antidoting-the-network)
+- [Putting It All Together](#putting-it-all-together)
+- [Automated Setup](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
+- [Configure RITA](#configure-rita)
+
 ## Install Ubuntu 18.04 (choose desktop or server)
 
 <https://releases.ubuntu.com>
@@ -114,7 +129,7 @@ sudo apt install libnetfiler-queue-dev
 
 Reference: <https://www.bettercap.org/modules/core/ui/>
 
-## Using the WebUI
+## Using the Web-UI
 
 This is entirely optional, as you only need a single line on the command line to get arp cache poisoning running.
 
@@ -333,7 +348,7 @@ Arp spoofing examples taken from: <https://www.bettercap.org/modules/ethernet/sp
 >> arp.spoof off
 ```
 
-Putting it all together:
+## Putting It All Together:
 ```bash
 # start bettercap with http web-ui
 sudo bettercap -caplet http-ui
