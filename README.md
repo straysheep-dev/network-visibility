@@ -69,7 +69,7 @@ NOTE: if installing RITA on security onion it is smart enough to detect ZEEK alr
 <https://www.bettercap.org/installation/>
 
 ```bash
-# always check <https://github.com/bettercap/bettercap/releases/latest> for the latest version.
+# Check for the latest version: https://github.com/bettercap/bettercap/releases/latest
 sudo apt install -y libpcap0.8 libusb-1.0-0 libnetfilter-queue1 unzip
 curl -LfO 'https://github.com/bettercap/bettercap/releases/download/v2.31.1/bettercap_linux_amd64_v2.31.1.sha256'
 curl -LfO 'https://github.com/bettercap/bettercap/releases/download/v2.31.1/bettercap_linux_amd64_v2.31.1.zip'
@@ -310,6 +310,7 @@ Host discovery examples taken from: <https://www.bettercap.org/modules/ethernet/
 
 Actively probe for hosts in the local network:
 ```bettercap
+# this can interfere with arp.spoof
 >> net.probe on
 
 # stop active probe
@@ -338,7 +339,6 @@ Putting it all together:
 sudo bettercap -caplet http-ui
 # either via bettercap interactive CLI over ssh or in the web-ui cmd bar:
 >> net.recon on
->> net.probe on
 >> arp.spoof on
 >> arp.spoof.fullduplex true
 # you're done! leave these running continuously to capture traffic
