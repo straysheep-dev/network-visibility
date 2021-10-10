@@ -109,6 +109,10 @@ function setupAntidote() {
 			echo -e "${BLUE}[i]Replacing default http web interface credentials (user::pass)...${RESET}"
 			sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
 			sudo sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+			# Restart bettercap for http-ui to accept new credentials
+			if (systemctl is-active --quiet arp-antidote.service); then
+				systemctl restart arp-antidote
+			fi
 	else
 		echo -e "${BOLD}[i]http-ui credentials already randomized, current entries below.${RESET}"
 	fi
@@ -117,6 +121,10 @@ function setupAntidote() {
 			echo -e "${BLUE}[i]Replacing default https web interface credentials (user::pass)...${RESET}"
 			sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
 			sudo sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+			# Restart bettercap for https-ui to accept new credentials
+			if (systemctl is-active --quiet arp-antidote.service); then
+				systemctl restart arp-antidote
+			fi
 	else
 		echo -e "${BOLD}[i]https-ui credentials already randomized, current entries below.${RESET}"
 	fi
