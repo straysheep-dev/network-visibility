@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Setup bettercap and the necesary services for intercepting traffic on a RITA server or desktop vm
-# Version=0.1 (still needs tested)
+# Version=0.2 (tested on 18.04.6 Desktop and Server)
 
 BLUE="\033[01;34m" # information
 BOLD="\033[01;01m" # highlight
@@ -25,6 +25,8 @@ function setupAntidote() {
 	HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'
 
 	# Check if RITA is installed
+	echo -e ""
+	echo -e "${BLUE}[i]Checking path for RITA...${RESET}"
 	if ! (command -v rita); then
 		echo -e "${BLUE}[i]RITA not installed, visit ${RESET}${BOLD}https://github.com/activecm/rita/releases/latest${RESET}"
 		echo -e "${BLUE}[>]or use: ${RESET}${BOLD}curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-install.sh${RESET}"
@@ -48,10 +50,10 @@ function setupAntidote() {
 		echo -e "${BLUE}[i]Changing working directory to $SETUPDIR${RESET}"
 
 
-		echo -e "${BLUE}[i]Installing any essential packages required by bettercap from apt...${RESET}"
+		echo -e "${BLUE}[i]Installing any essential packages required by bettercap or RITA from apt...${RESET}"
 		# Install essential packages
 		apt update
-		apt install -y libpcap0.8 libusb-1.0-0 libnetfilter-queue1 unzip
+		apt install -y curl libpcap0.8 libusb-1.0-0 libnetfilter-queue1 unzip
 
 		# Install bettercap pre-compiled binary from GitHub
 		# Check for the latest version: https://github.com/bettercap/bettercap/releases/latest
@@ -82,6 +84,7 @@ function setupAntidote() {
 
 
 		# Perform error checks (will need tested as conditional statements here)
+		# Tested on 10/10/21; no issues as of Ubuntu 18.04.6 LTS release, both desktop and server
 
 		## If you see 'libpcap.so.1 library is not available' you'll need to symbolicly link libpcacp.so to libpcacp.so.1.
 		## Additional packages required to resolve error:
@@ -92,6 +95,7 @@ function setupAntidote() {
 		## If you see the error 'libnetfilter_queue.so.1 is not available":
 		#sudo apt install libnetfiler-queue-dev
 
+
 		# Update caplets and web-ui
 		echo -e "${BLUE}[i]Updating bettercap resources...${RESET}"
 		bettercap -eval "caplets.update; ui.update; q" || (exit && echo "Error updating bettercap resources. Quitting.")
@@ -100,18 +104,21 @@ function setupAntidote() {
 	echo -e "${BLUE}[✓]Done.${RESET}"
 	fi
 
-	# gpg --gen-random changed from 24 to 26, 24 outputs a trailing slash `/` that doesn't work well with sed
 	# Replace default http credentials if found
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTP_CONF"); then
 			echo -e "${BLUE}[i]Replacing default http web interface credentials (user::pass)...${RESET}"
-			sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(gpg --gen-random --armor 0 26)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
-			sudo sed -i 's/^set api.rest.username user$/set api.rest.username '"$(gpg --gen-random --armor 0 26)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+			sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+			sudo sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+	else
+		echo -e "${BOLD}[i]http-ui credentials already randomized, current entries below.${RESET}"
 	fi
 	# Replace default https credentials if found
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTPS_CONF"); then
 			echo -e "${BLUE}[i]Replacing default https web interface credentials (user::pass)...${RESET}"
-			sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(gpg --gen-random --armor 0 26)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
-			sudo sed -i 's/^set api.rest.username user$/set api.rest.username '"$(gpg --gen-random --armor 0 26)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+			sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+			sudo sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+	else
+		echo -e "${BOLD}[i]https-ui credentials already randomized, current entries below.${RESET}"
 	fi
 
 	# Check if the forwarding service exists
@@ -264,7 +271,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/arp-antidote.service
 function removeAntidote() {
 	# Undo and uninstall all components related to arp-cache antidoting and bettercap
 	echo -e "${BLUE}[i]Removing the following services and files:${RESET}"
-	echo -e "${BLUE}[i]Note: these files can easily be reinstalled by re-running the script${RESET}"
+	echo -e "${BLUE}[i]Note: these can easily be reinstalled by re-running the script${RESET}"
 	echo -e "${BOLD}service: /etc/systemd/system/arp-antidote.service${RESET}"
 	echo -e "${BOLD}service: /etc/systemd/system/bettercap-forwarding.service${RESET}"
 	echo -e "${BOLD}file: /etc/iptables/enable-forwarding.sh${RESET}"
@@ -299,9 +306,10 @@ function removeAntidote() {
 		echo -e "${BLUE}[i]Not removing any bettercap.log files, review /var/log/ or ~/ if any exist.${RESET}"
 		rm /usr/local/bin/bettercap
 		rm -rf /usr/local/share/bettercap
+		echo -e "${BLUE}[✓]Bettercap removed.${RESET}"
 	fi
-	echo -e "${BLUE}[✓]Bettercap removed.${RESET}"
-	
+
+
 	if [ -e /usr/local/bin/setup-antidote.sh ]; then
 		echo -e "${BLUE}[?]Remove /usr/local/bin/setup-antidote.sh?${RESET}"
 		until [[ $REMOVE_INSTALLER =~ ^(y|n)$ ]]; do
@@ -315,30 +323,121 @@ function removeAntidote() {
 	echo -e "${BLUE}[✓]Done.${RESET}"
 }
 
+function startServices() {
+	echo -e "${BLUE}[i]Starting and enabling services...${RESET}"
+	# Checks for bettercap-forwarding.service
+	if (systemctl is-active --quiet bettercap-forwarding.service); then
+		echo "[i]bettercap-forwarding.service already running."
+	elif (systemctl is-enabled --quiet bettercap-forwarding.service); then
+		echo "[i]restarting bettercap-forwarding.service..."
+		systemctl restart bettercap-forwarding
+	else
+		systemctl enable bettercap-forwarding
+		systemctl restart bettercap-forwarding
+	fi
+	# Checks for arp-antidote.service
+	if (systemctl is-active --quiet arp-antidote.service); then
+		echo "[i]arp-antidote.service already running."
+	elif (systemctl is-enabled --quiet arp-antidote.service); then
+		echo "[i]restarting arp-antidote.service..."
+		systemctl restart arp-antidote
+	else
+		systemctl enable arp-antidote
+		systemctl restart arp-antidote
+	fi
+	echo -e "${BLUE}[✓]Done.${RESET}"
+}
+
+function stopServices() {
+	echo -e "${BLUE}[i]Stopping and disabling services...${RESET}"
+	# Checks for arp-antidote.service
+	if ! (systemctl is-active --quiet arp-antidote.service); then
+		echo "[i]arp-antidote.service already stopped."
+		systemctl disable arp-antidote
+	else
+		systemctl stop arp-antidote
+		systemctl disable arp-antidote
+	fi
+	# Checks for bettercap-forwarding.service
+	if ! (systemctl is-active --quiet bettercap-forwarding.service); then
+		echo "[i]bettercap-forwarding.service already stopped."
+		systemctl disable bettercap-forwarding
+	else
+		systemctl stop bettercap-forwarding
+		systemctl disable bettercap-forwarding
+	fi
+	echo -e "${BLUE}[✓]Done.${RESET}"
+}
+
 # Command-Line-Arguments
 function manageMenu() {
 	if [ -e /etc/systemd/system/arp-antidote.service ]; then 
-		echo ""
-		echo "Network visibility services already installed."
-		echo "https://github.com/straysheep-dev/network-visibility"
-		echo ""
-		echo "What would you like to do?"
-		echo ""
-		echo "   1) Randomize the http(s)-ui credentials after updating caplets"
-		echo "   2) Stop and remove the arp-cache services, optionally also bettercap"
-		echo "   3) Exit"
-		until [[ $MENU_OPTION =~ ^[1-3]$ ]]; do
-			read -rp "Select an option [1-4]: " MENU_OPTION
+		echo -e ""
+		echo -e "${BOLD}Network visibility services already installed.${RESET}"
+		echo -e "${BLUE}https://github.com/straysheep-dev/network-visibility${RESET}"
+		echo -e ""
+		# Check if RITA is installed
+		if ! [ -e /usr/local/bin/rita ]; then
+			echo -e "${BLUE}[i]RITA not installed, visit ${RESET}${BOLD}https://github.com/activecm/rita/releases/latest${RESET}"
+			echo -e "${BLUE}[>]or use: ${RESET}${BOLD}curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-install.sh${RESET}"
+		fi
+		echo -e ""
+		# Show arp-antidote.service status
+		if (systemctl is-active --quiet arp-antidote.service); then
+			if (systemctl is-enabled --quiet arp-antidote.service); then
+				echo -e "${BLUE}●${RESET} arp-antidote.service is active and enabled (running)"
+			else
+				echo -e "${BLUE}●${RESET} arp-antidote.service ${BLUE}is active but not enabled${RESET} (running)"
+			fi
+		else
+			if (systemctl is-enabled --quiet arp-antidote.service); then
+				echo -e "● arp-antidote.service ${BOLD}not${RESET} active but is enabled (dead)"
+			else
+				echo -e "● arp-antidote.service ${BOLD}not${RESET} active or enabled (dead)"
+			fi
+		fi
+		# Show bettercap-forwarding.service status
+		if (systemctl is-active --quiet bettercap-forwarding.service); then
+			if (systemctl is-enabled --quiet bettercap-forwarding.service); then
+				echo -e "${BLUE}●${RESET} bettercap-forwarding.service is active and enabled (running)"
+			else
+				echo -e "${BLUE}●${RESET} bettercap-forwarding.service ${BLUE}is active but not enabled${RESET} (running)"
+			fi
+		else
+			if (systemctl is-enabled --quiet bettercap-forwarding.service); then
+				echo -e "● bettercap-forwarding.service ${BOLD}not${RESET} active but is enabled (dead)"
+			else
+				echo -e "● bettercap-forwarding.service ${BOLD}not${RESET} active or enabled (dead)"
+			fi
+		fi
+
+		echo -e ""
+		echo -e ""
+		echo -e "What would you like to do?"
+		echo -e ""
+		echo -e "   1) Start and enable the services"
+		echo -e "   2) Stop and disable the services"		
+		echo -e "   3) Randomize the http(s)-ui credentials (after updating caplets)"
+		echo -e "   4) Uninstall the services, optionally also bettercap"
+		echo -e "   5) Exit"
+		until [[ $MENU_OPTION =~ ^[1-5]$ ]]; do
+			read -rp "Select an option [1-5]: " MENU_OPTION
 		done
 
 		case $MENU_OPTION in
 		1)
-			setupAntidote
+			startServices
 			;;
 		2)
-			removeAntidote
+			stopServices
 			;;
 		3)
+			setupAntidote
+			;;
+		4)
+			removeAntidote
+			;;
+		5)
 			exit 0
 			;;
 		esac
