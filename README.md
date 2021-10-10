@@ -145,8 +145,8 @@ If bettercap is running on Ubuntu Desktop and you'll only be accessing it locall
 **Edit the default credentials in /usr/local/share/bettercap/caplets/http-ui.cap**
 ```bash
 # replace the default user/pass
-sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '$(gpg --gen-random --armor 0 24)'/' /usr/local/share/bettercap/caplets/http-ui.cap
-sudo sed -i 's/^set api.rest.username user$/set api.rest.username '$(gpg --gen-random --armor 0 24)'/' /usr/local/share/bettercap/caplets/http-ui.cap
+sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)'/' /usr/local/share/bettercap/caplets/http-ui.cap
+sudo sed -i 's/^set api.rest.username user$/set api.rest.username '$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)'/' /usr/local/share/bettercap/caplets/http-ui.cap
 # store these values in your credential manager:
 cat /usr/local/share/bettercap/caplets/http-ui.cap
 ```
@@ -155,8 +155,8 @@ If bettercap is running on Ubuntu Server or Desktop and you want to access it fr
 **Edit the default credentials in /usr/local/share/bettercap/caplets/https-ui.cap**
 ```bash
 # replace the default user/pass
-sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '$(gpg --gen-random --armor 0 24)'/' /usr/local/share/bettercap/caplets/https-ui.cap
-sudo sed -i 's/^set api.rest.username user$/set api.rest.username '$(gpg --gen-random --armor 0 24)'/' /usr/local/share/bettercap/caplets/https-ui.cap
+sudo sed -i 's/^set api.rest.password pass$/set api.rest.password '$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)'/' /usr/local/share/bettercap/caplets/https-ui.cap
+sudo sed -i 's/^set api.rest.username user$/set api.rest.username '$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)'/' /usr/local/share/bettercap/caplets/https-ui.cap
 # store these values in your credential manager:
 cat /usr/local/share/bettercap/caplets/https-ui.cap
 ```
