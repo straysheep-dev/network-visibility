@@ -46,6 +46,11 @@ curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.6-live-server-amd64.is
 # Desktop:
 curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.6-desktop-amd64.iso'
 
+# Raspberry Pi:
+curl -LfO 'https://cdimage.ubuntu.com/releases/18.04/release/SHA256SUMS'
+curl -LfO 'https://cdimage.ubuntu.com/releases/18.04/release/SHA256SUMS.gpg'
+curl -LfO 'https://cdimage.ubuntu.com/releases/18.04/release/ubuntu-18.04.5-preinstalled-server-arm64+raspi4.img.xz'
+
 gpg --keyid-format long --keyserver hkps://keyserver.ubuntu.com:443 --recv-keys '843938DF228D22F7B3742BC0D94AA3F0EFE21092'
 gpg --verify --keyid-format long SHA256SUMS.gpg SHA256SUMS
 sha256sum -c SHA256SUMS --ignore-missing
