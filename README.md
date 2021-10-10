@@ -391,6 +391,14 @@ rita import --rolling /opt/zeek/logs/$(date --date='-1 hour' +\%Y-\%m-\%d)/ data
 ```bash
 # print out all commands for parsing data
 rita --help
+
+# print help for specific commands
+rita <command> --help
+rita show-beacons --help
+
+# use -H (human-readable) to format data into a table
+rita <command> -H <dataset_name> | less -S
+rita show-exploded-dns -H dataset_1 | less -S
 ```
 
 ## What Next?
