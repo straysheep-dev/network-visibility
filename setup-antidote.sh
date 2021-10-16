@@ -202,7 +202,7 @@ After=network.target
 [Service]
 Type=simple
 PermissionsStartOnly=true
-ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; arp.spoof on; set arp.spoof.fullduplex true; set events.stream.output /var/log/bettercap.log; http-ui on'
+ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on; set arp.spoof.fullduplex true; http-ui on'
 Restart=always
 RestartSec=30
 
@@ -220,7 +220,7 @@ After=network.target
 [Service]
 Type=simple
 PermissionsStartOnly=true
-ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; arp.spoof on; set arp.spoof.fullduplex true; set events.stream.output /var/log/bettercap.log; api.rest on'
+ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on; set arp.spoof.fullduplex true; api.rest on'
 Restart=always
 RestartSec=30
 
