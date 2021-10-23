@@ -7,35 +7,35 @@ BLUE="\033[01;34m" # information
 BOLD="\033[01;01m" # highlight
 RESET="\033[00m"   # reset
 
+UID1000="$(grep '1000' /etc/passwd | cut -d ':' -f 1)"                               # Normal user
+PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)"     # Public Network Interface Card
+HTTP_CONF='/usr/local/share/bettercap/caplets/http-ui.cap'                           # Default path to http(s) conf files that contain credentials
+HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'
+
+RITA_VER='4.4.0'                                                                     # Replace variable when latest release is available
+RITA_HASH='2a707a9046ce7d0e83392f908fcebe6cacca57517437679303ab5b755a0294c1'         # Replace variable when latest release is available
+BETTERCAP_VER='2.31.1'                                                               # Replace this variable when latest binary release is available
+BETTERCAP_AARCH64_HASH='a278b191f7d36419d390dfca4af651daf1e9f1c7900ec1b3f627ab6c2f7b57e2' # Replace this variable when latest binary release is available
+BETTERCAP_AMD64_HASH='74e85473d8cbeaa79b3c636032cbd0967387c4e9f95e253b4ae105eccd208a4f'   # Replace this variable when latest binary release is available
+
+# System arch check
+if (uname -mrs | grep -q 'x86_64'); then
+	BETTERCAP_BIN="bettercap_linux_amd64_v$BETTERCAP_VER"
+elif (uname -mrs | grep -q 'aarch64'); then
+	BETTERCAP_BIN="bettercap_linux_aarch64_v$BETTERCAP_VER"
+else
+	echo "${BOLD}[i]Currently supported architectures: x86_64, aarch64${RESET}" && exit 1
+fi
+
+
+
 # Root EUID check
 if [ "${EUID}" -ne 0 ]; then
 	echo "You need to run this script as root"
 	exit 1
 fi
 
-function setupAntidote() {
-	# Normal user
-	UID1000="$(grep '1000' /etc/passwd | cut -d ':' -f 1)"
-	# Public Network Interface Card
-	PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)"
-	# Replace this variable with the latest binary releases when available
-	BETTERCAP_VER="bettercap_linux_amd64_v2.31.1"
-	# Default path to http(s) conf files that contain credentials
-	HTTP_CONF='/usr/local/share/bettercap/caplets/http-ui.cap'
-	HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'
-
-	# Check if RITA is installed
-	echo -e ""
-	echo -e "${BLUE}[i]Checking path for RITA...${RESET}"
-	if ! (command -v rita); then
-		echo -e "${BLUE}[i]RITA not installed, visit ${RESET}${BOLD}https://github.com/activecm/rita/releases/latest${RESET}"
-		echo -e "${BLUE}[>]or use: ${RESET}${BOLD}curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-install.sh${RESET}"
-	fi
-
-	# Check if bettercap is installed
-	if [ -e /usr/local/bin/bettercap ]; then
-		echo -e "${BLUE}[✓]Found /usr/local/bin/bettercap...${RESET}"
-	else
+function makeTemp() {
 		# Make a temporary working directory
 		if [ -d /tmp/antidote/ ]; then
 			rm -rf /tmp/antidote
@@ -46,11 +46,56 @@ function setupAntidote() {
 		SETUPDIR=/tmp/antidote
 		export SETUPDIR
 
-		cd "$SETUPDIR" || (exit && echo "Failed changing into setup directory. Quitting.")
+		cd "$SETUPDIR" || (echo "Failed changing into setup directory. Quitting." && exit 1)
 		echo -e "${BLUE}[i]Changing working directory to $SETUPDIR${RESET}"
+}
 
 
-		echo -e "${BLUE}[i]Installing any essential packages required by bettercap or RITA from apt...${RESET}"
+function installRITA() {
+	# Check if RITA is installed
+	echo -e ""
+	echo -e "${BLUE}[i]Checking path for RITA...${RESET}"
+	if ! (command -v rita); then
+		sleep 2
+		echo -e "${BLUE}[i]RITA not installed, visit ${RESET}${BOLD}https://github.com/activecm/rita/releases/latest${RESET}"
+		echo -e "${BLUE}[>]or use: ${RESET}${BOLD}curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v$RITA_VER/install.sh' > rita-installer.sh${RESET}"
+
+		echo ""
+		echo -e "${BLUE}[?]Would you like to install RITA automatically with this script?${RESET}"
+		until [[ $INSTALL_RITA =~ ^(y|n)$ ]]; do
+			read -rp "[y/n]? " INSTALL_RITA
+		done
+
+		if [[ $INSTALL_RITA == "y" ]]; then
+			echo -e "${BLUE}[i]Checking path for curl...${RESET}"
+			if ! (command -v curl); then
+				apt install -y curl
+			fi
+			sleep 1
+			curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v'"$RITA_VER"'/install.sh' > rita-installer.sh && \
+			echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+			if ! (sha256sum ./rita-installer.sh | grep -qx  "$RITA_HASH  ./rita-installer.sh"); then
+				echo "Bad checksum. Quitting." && exit 1
+			else
+				echo 'OK'
+			fi
+			for installer in "$(pwd)"/rita-installer.sh; do 
+				chown root:root "$installer"
+				chmod 755 "$installer"
+				echo -e "${BLUE}[>]Installing RITA..."
+				sleep 2
+				"$installer"
+				sleep 2
+			done
+		fi
+	fi
+}
+
+function installPackages() {
+	# Check if bettercap is installed
+	echo -e "${BLUE}[i]Checking path for bettercap...${RESET}"
+	if ! (command -v bettercap); then
+		echo -e "${BLUE}[i]Installing any essential packages required by bettercap and RITA from apt...${RESET}"
 		# Install essential packages
 		apt update
 		apt install -y curl libpcap0.8 libusb-1.0-0 libnetfilter-queue1 unzip
@@ -58,20 +103,22 @@ function setupAntidote() {
 		# Install bettercap pre-compiled binary from GitHub
 		# Check for the latest version: https://github.com/bettercap/bettercap/releases/latest
 		echo -e "${BLUE}[i]Fetching bettercap binary and checksum from GitHub with curl...${RESET}"
-		pkexec --user "$UID1000" curl -Lf 'https://github.com/bettercap/bettercap/releases/download/v2.31.1/'"$BETTERCAP_VER"'.sha256' > "$SETUPDIR"/"$BETTERCAP_VER"'.sha256'
-		pkexec --user "$UID1000" curl -Lf 'https://github.com/bettercap/bettercap/releases/download/v2.31.1/'"$BETTERCAP_VER"'.zip' > "$SETUPDIR"/"$BETTERCAP_VER"'.zip'
-		# Use curl as normal user, to specified directory using shell redirection `>` changing ownership back to root
-		# Else curl outputs file to normal user's home dir
+		curl -Lf 'https://github.com/bettercap/bettercap/releases/download/v'"$BETTERCAP_VER"'/'"$BETTERCAP_BIN"'.sha256' > "$SETUPDIR"/"$BETTERCAP_BIN"'.sha256'
+		curl -Lf 'https://github.com/bettercap/bettercap/releases/download/v'"$BETTERCAP_VER"'/'"$BETTERCAP_BIN"'.zip' > "$SETUPDIR"/"$BETTERCAP_BIN"'.zip'
 
 		echo -e "${BLUE}[i]Extracting bettercap binary from archive...${RESET}"
-		unzip ./"$BETTERCAP_VER".zip 'bettercap'
-		
+		unzip ./"$BETTERCAP_BIN".zip 'bettercap'
+
 		sleep 1
-		
+
+		echo ""
 		echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
-		sha256sum -c ./"$BETTERCAP_VER".sha256 || (exit && echo "Quitting.")
-		# If 'bettercap: OK' add it to your path
-		
+		# Check against known hash
+		(grep -qxE "SHA256\(bettercap\)= ($BETTERCAP_AARCH64_HASH|$BETTERCAP_AMD64_HASH)" ./"$BETTERCAP_BIN".sha256 && \
+		# Check against downloaded hash
+		sha256sum -c ./"$BETTERCAP_BIN".sha256) || (echo "Bad checksum. Quitting." && exit 1)
+		# If 'bettercap: OK' add it to your path, otherwise exit, leaving the binary behind in $SETUPDIR to examine.
+
 		sleep 2
 
 		echo -e "${BLUE}[i]Installing bettercap...${RESET}"
@@ -80,11 +127,11 @@ function setupAntidote() {
 		sudo mv ./bettercap -t /usr/local/bin/
 
 		echo -e "${BLUE}[i]Ensuring bettercap is in current PATH...${RESET}"
-		command -v bettercap || (exit && echo "Bettercap not found in PATH. Quitting.")
+		command -v bettercap || (echo "Bettercap not found in PATH. Quitting." && exit 1)
 
 
 		# Perform error checks (will need tested as conditional statements here)
-		# Tested on 10/10/21; no issues as of Ubuntu 18.04.6 LTS release, both desktop and server
+		# Tested on 10/22/21; no issues as of Ubuntu 18.04.6 LTS release, desktop-amd64, server-amd64, and server-arm64(raspberry pi 4B, 8GB)
 
 		## If you see 'libpcap.so.1 library is not available' you'll need to symbolicly link libpcacp.so to libpcacp.so.1.
 		## Additional packages required to resolve error:
@@ -97,13 +144,16 @@ function setupAntidote() {
 
 
 		# Update caplets and web-ui
+		echo ""
 		echo -e "${BLUE}[i]Updating bettercap resources...${RESET}"
-		bettercap -eval "caplets.update; ui.update; q" || (exit && echo "Error updating bettercap resources. Quitting.")
+		bettercap -eval "caplets.update; ui.update; q" || (echo "Error updating bettercap resources. Quitting." && exit 1)
 
 		sleep 2 
 	echo -e "${BLUE}[✓]Done.${RESET}"
 	fi
+}
 
+function updateCredentials() {
 	# Replace default http credentials if found
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTP_CONF"); then
 			echo -e "${BLUE}[i]Replacing default http web interface credentials (user::pass)...${RESET}"
@@ -114,6 +164,7 @@ function setupAntidote() {
 				systemctl restart arp-antidote
 			fi
 	else
+		echo ""
 		echo -e "${BOLD}[i]http-ui credentials already randomized, current entries below.${RESET}"
 	fi
 	# Replace default https credentials if found
@@ -126,8 +177,13 @@ function setupAntidote() {
 				systemctl restart arp-antidote
 			fi
 	else
+		echo ""
 		echo -e "${BOLD}[i]https-ui credentials already randomized, current entries below.${RESET}"
 	fi
+}
+
+function installServices() {
+	# Update the web-ui credentials before starting any services
 
 	# Check if the forwarding service exists
 	if [ -e /etc/systemd/system/bettercap-forwarding.service ]; then
@@ -252,13 +308,17 @@ WantedBy=multi-user.target" >/etc/systemd/system/arp-antidote.service
 			echo -e "${BOLD}[i]sudo systemctl restart arp-antidote${RESET}"
 		fi
 	fi
+}
 
+function cleanUp() {
 	# Cleanup
-	rm -rf "$SETUPDIR"
+	if [ -e "$SETUPDIR" ]; then
+		rm -rf "$SETUPDIR"
+	fi
 
 	#Save script for management
 	if ! [ -e /usr/local/bin/setup-antidote.sh ]; then
-		echo -e "${BLUE}[i]Adding setup-antidote.sh to /usr/local/bin/${RESET}"
+		echo -e "${BLUE}[i]Adding setup-antidote.sh to /usr/local/bin/ for management.${RESET}"
 		find /home/"$UID1000"/ -type f -name "setup-antidote.sh" -print0 | xargs -0 cp -t /usr/local/bin/ && chmod 755 /usr/local/bin/setup-antidote.sh
 	fi
 
@@ -273,18 +333,17 @@ WantedBy=multi-user.target" >/etc/systemd/system/arp-antidote.service
 	echo -e "${BOLD}[https]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
 	echo -e "${BOLD}[https]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
 	echo ""
-	echo -e "${BOLD}Happy hunting!${RESET}"
 }
 
 function removeAntidote() {
 	# Undo and uninstall all components related to arp-cache antidoting and bettercap
-	echo -e "${BLUE}[i]Removing the following services and files:${RESET}"
-	echo -e "${BLUE}[i]Note: these can easily be reinstalled by re-running the script${RESET}"
-	echo -e "${BOLD}service: /etc/systemd/system/arp-antidote.service${RESET}"
-	echo -e "${BOLD}service: /etc/systemd/system/bettercap-forwarding.service${RESET}"
-	echo -e "${BOLD}file: /etc/iptables/enable-forwarding.sh${RESET}"
-	echo -e "${BOLD}file: /etc/iptables/disable-forwarding.sh${RESET}"
-	echo -e "${BOLD}file: /etc/sysctl.d/20-bettercap.conf${RESET}"
+	echo -e ""
+	echo -e "${BLUE}[i]NOTE: These can easily be reinstalled by re-running this script${RESET}"
+	echo -e "${BOLD}Removing service: /etc/systemd/system/arp-antidote.service${RESET}"
+	echo -e "${BOLD}Removing service: /etc/systemd/system/bettercap-forwarding.service${RESET}"
+	echo -e "${BOLD}Removing file: /etc/iptables/enable-forwarding.sh${RESET}"
+	echo -e "${BOLD}Removing file: /etc/iptables/disable-forwarding.sh${RESET}"
+	echo -e "${BOLD}Removing file: /etc/sysctl.d/20-bettercap.conf${RESET}"
 
 	systemctl stop arp-antidote
 	systemctl disable arp-antidote
@@ -309,9 +368,9 @@ function removeAntidote() {
 	done
 
 	if [[ $REMOVE_BETTERCAP == "y" ]]; then
-		echo -e "${BOLD}file: /usr/local/bin/bettercap${RESET}"
-		echo -e "${BOLD}dir: /usr/local/share/bettercap${RESET}"
-		echo -e "${BLUE}[i]Not removing any bettercap.log files, review /var/log/ or ~/ if any exist.${RESET}"
+		echo -e "${BOLD}Removing file: /usr/local/bin/bettercap${RESET}"
+		echo -e "${BOLD}Removing dir: /usr/local/share/bettercap${RESET}"
+		echo -e "${BLUE}[i]NOTE: Not removing any bettercap.log files, review /var/log/, /root/, or ~/ if any exist.${RESET}"
 		rm /usr/local/bin/bettercap
 		rm -rf /usr/local/share/bettercap
 		echo -e "${BLUE}[✓]Bettercap removed.${RESET}"
@@ -377,6 +436,16 @@ function stopServices() {
 	echo -e "${BLUE}[✓]Done.${RESET}"
 }
 
+# Set of core functions called through setupAntidote
+function setupAntidote() {
+	makeTemp
+	installRITA
+	installPackages
+	updateCredentials
+	installServices
+	cleanUp
+}
+
 # Command-Line-Arguments
 function manageMenu() {
 	if [ -e /etc/systemd/system/arp-antidote.service ]; then 
@@ -387,7 +456,7 @@ function manageMenu() {
 		# Check if RITA is installed
 		if ! [ -e /usr/local/bin/rita ]; then
 			echo -e "${BLUE}[i]RITA not installed, visit ${RESET}${BOLD}https://github.com/activecm/rita/releases/latest${RESET}"
-			echo -e "${BLUE}[>]or use: ${RESET}${BOLD}curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-install.sh${RESET}"
+			echo -e "${BLUE}[>]or use: ${RESET}${BOLD}curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-installer.sh${RESET}"
 		fi
 		echo -e ""
 		# Show arp-antidote.service status
@@ -426,10 +495,11 @@ function manageMenu() {
 		echo -e "   1) Start and enable the services"
 		echo -e "   2) Stop and disable the services"		
 		echo -e "   3) Randomize the http(s)-ui credentials (after updating caplets)"
-		echo -e "   4) Uninstall the services, optionally also bettercap"
-		echo -e "   5) Exit"
-		until [[ $MENU_OPTION =~ ^[1-5]$ ]]; do
-			read -rp "Select an option [1-5]: " MENU_OPTION
+		echo -e "   4) Install RITA"
+		echo -e "   5) Uninstall the services, optionally also bettercap"
+		echo -e "   6) Exit"
+		until [[ $MENU_OPTION =~ ^[1-6]$ ]]; do
+			read -rp "Select an option [1-6]: " MENU_OPTION
 		done
 
 		case $MENU_OPTION in
@@ -440,12 +510,19 @@ function manageMenu() {
 			stopServices
 			;;
 		3)
-			setupAntidote
+			updateCredentials
+			cleanUp
 			;;
 		4)
-			removeAntidote
+			makeTemp
+			installRITA
+			sleep 1
+			cleanUp
 			;;
 		5)
+			removeAntidote
+			;;
+		6)
 			exit 0
 			;;
 		esac
