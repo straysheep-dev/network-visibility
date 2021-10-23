@@ -30,13 +30,16 @@ The goal was to be able to curl RITA's installer, then simply curl one more that
 
 ## Install Ubuntu 18.04 (choose desktop or server)
 
-<https://releases.ubuntu.com>
-
 NOTE: with Ubuntu 20.04 mongodb will silently fail to install despite everything else running. 
 
 See: <https://github.com/activecm/rita/issues/587>
 
 ```bash
+# https://releases.ubuntu.com               ## main images
+# https://cdimage.ubuntu.com/releases/      ## raspi + alternate flavors
+# https://ubuntu.com/download/raspberry-pi
+# https://ubuntu.com/tutorials/how-to-install-ubuntu-on-your-raspberry-pi
+
 curl -LfO 'https://releases.ubuntu.com/18.04/SHA256SUMS'
 curl -LfO 'https://releases.ubuntu.com/18.04/SHA256SUMS.gpg'
 
@@ -330,7 +333,7 @@ Host discovery examples taken from: <https://www.bettercap.org/modules/ethernet/
 
 Actively probe for hosts in the local network:
 ```bettercap
-# this can interfere with arp.spoof
+# actively find hosts on local subnet
 >> net.probe on
 
 # stop active probe
@@ -359,6 +362,7 @@ Arp spoofing examples taken from: <https://www.bettercap.org/modules/ethernet/sp
 sudo bettercap -caplet http-ui
 # either via bettercap interactive CLI over ssh or in the web-ui cmd bar:
 >> net.recon on
+>> net.probe on
 >> arp.spoof on
 >> arp.spoof.fullduplex true
 # you're done! leave these running continuously to capture traffic
