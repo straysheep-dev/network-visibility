@@ -18,8 +18,11 @@ A [setup script](https://github.com/straysheep-dev/network-visibility/blob/main/
 The goal was to be able to curl RITA's installer, then simply curl one more that handles everything else required for setup and removal.
 
 ## Contents
-- [Install Ubuntu 18.04](#install-ubuntu-1804-choose-desktop-or-server)
-- [Install RITA / Zeek](#install-rita--zeek)
+- [Install Ubuntu 18.04 or 20.04](#install-ubuntu-1804-or-2004-choose-desktop-or-server)
+- [Install RITA / MongoDB / ZEEK](#install-rita--mongodb--zeek)
+    * [Ubuntu 18.04 x86_64](#ubuntu-1804-x86_64)
+    * [Ubuntu 18.04 arm64](#ubuntu-1804-arm64)
+    * [Ubuntu 20.04 x86_64 + arm64](#ubuntu-2004-x86_64-and-arm64)
 - [Installing Bettercap from Pre-compiled Binaries (GitHub)](#installing-bettercap-from-pre-compiled-binaries-github)
 - [Resolving Errors](#resolving-errors)
 - [Using the Web-UI](#using-the-web-ui)
@@ -28,9 +31,9 @@ The goal was to be able to curl RITA's installer, then simply curl one more that
 - [Automated Setup](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
 - [Configure RITA](#configure-rita)
 
-## Install Ubuntu 18.04 (choose desktop or server)
+## Install Ubuntu 18.04 or 20.04 (choose desktop or server)
 
-NOTE: with Ubuntu 20.04 mongodb will silently fail to install despite everything else running. 
+NOTE: with RITA's shell installer on Ubuntu 20.04 mongodb will silently fail to install despite everything else running.
 
 See: <https://github.com/activecm/rita/issues/587>
 
@@ -65,7 +68,9 @@ From here, continue setup using your hypervisor of choice. VMware and VirtualBox
 Remember that upgrading ubuntu 18.04 => 20.04 during install may break monogdb as mentioned above.
 
 
-## Install RITA / ZEEK
+## Install RITA / MongoDB / ZEEK
+
+### Ubuntu 18.04 x86_64
 
 ```bash
 # Check for the latest version: https://github.com/activecm/rita/releases/latest
@@ -81,15 +86,244 @@ sudo ./install.sh -r --disable-zeek --disable-mongo
 # You want that 'Thank you for installing RITA! Happy hunting!' line at the end
 
 # check that both services are running:
-systemctl status      # look for zeek
+sudo /opt/zeek/bin/zeekctl status
 systemctl status mongod.service
 ```
 
-NOTE: if installing RITA on security onion it is smart enough to detect ZEEK already installed
+NOTE: if installing RITA on [Security Onion](https://github.com/Security-Onion-Solutions/securityonion) it is smart enough to detect ZEEK already installed
+
+### Ubuntu 18.04 arm64
+
+```bash
+# As of 2021-12-01 https://github.com/activecm/docker-zeek is the quickest method on 18.04 arm64 architecture
+# There is currently no precompiled binary on https://build.opensuse.org/project/show/security:zeek for 18.04
+
+# Install docker
+# https://docs.docker.com/engine/install/ubuntu/
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+curl -fsSL 'https://download.docker.com/linux/ubuntu/gpg' > docker-archive-keyring.gpg
+gpg --keyid-format long ./docker-archive-keyring.gpg | grep '9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88'
+
+gpg --dearmor < ./docker-archive-keyring.gpg | sudo tee /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io
+
+# Install docker-zeek
+# https://github.com/activecm/docker-zeek
+curl -fsSL 'https://raw.githubusercontent.com/activecm/docker-zeek/master/zeek' > zeek
+sudo chown root:root ./zeek
+sudo chmod 755 ./zeek
+sudo mv ./zeek /usr/local/bin/zeek
+
+sudo mkdir -p /opt/zeek/etc
+# If you have issues with node.cfg, use the same configuration generation script that RITA's shell installer script uses:
+curl -fsSL "https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh" > "gen-node-cfg.sh"
+curl -fsSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" > "node.cfg-template"
+sudo chown root:root ./gen-node-cfg.sh
+sudo chown root:root ./node.cfg-template
+sudo chmod 755 ./gen-node-cfg.sh
+sudo chmod 644 ./node.cfg-template
+sudo ./gen-node-cfg.sh
+
+# Export Zeek version
+# https://github.com/activecm/docker-zeek#zeek-version
+echo "export zeek_release=latest" | sudo tee -a /etc/profile.d/zeek.sh
+source /etc/profile.d/zeek.sh
+
+# Start docker-zeek
+/usr/local/bin/zeek start
+# Stop docker-zeek
+/usr/local/bin/zeek stop
+# Enable docker-zeek to automatically restart itself
+/usr/local/bin/zeek enable
+
+# Install the zeek-open-connections plugin
+# https://github.com/activecm/zeek-open-connections/
+# https://docs.zeek.org/projects/package-manager/en/stable/quickstart.html
+sudo docker exec -it zeek zkg refresh
+sudo docker exec -it zeek zkg install zeek/activecm/zeek-open-connections
+/usr/local/bin/zeek restart
+
+# From here either continue below, or jump to the instructions for 20.04 to use RITA via docker instead.
+
+# Install MongoDB (via apt-get from repo.mongodb.org)
+# https://docs.mongodb.com/v4.2/installation/
+
+curl -fsSLO https://www.mongodb.org/static/pgp/server-4.2.asc
+gpg --with-fingerprint --keyid-format long ./server-4.2.asc | grep 'E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B'
+
+sudo apt-key add ./server-4.2.asc
+
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu bionic/mongodb-org/4.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-4.2.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+
+# Potentially hold package versions back?
+# https://docs.mongodb.com/v4.2/tutorial/install-mongodb-on-ubuntu/#install-the-mongodb-packages
+
+systemctl start mongod
+# If mongod doesn't start:
+systemctl daemon-reload
+
+# Ensure MongoDB is running
+if ! (systemctl is-active mongod); then
+    systemctl unmask mongod
+    systemctl enable mongod
+    systemctl restart mongod
+fi
+
+# Install RITA from source
+# https://go.dev/doc/install
+curl -fsSLO 'https://go.dev/dl/go1.17.4.linux-amd64.tar.gz'
+sha256sum go1.17.4.linux-arm64.tar.gz | grep 'adab2483f644e2f8a10ae93122f0018cef525ca48d0b8764dae87cb5f4fd4206'
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.17.4.linux-amd64.tar.gz
+
+# Create the following PATH file at /etc/profile.d/go.sh
+if [ -d "/usr/local/go" ] ; then
+    PATH="$PATH:/usr/local/go/bin"
+fi
+
+# Source the updated PATH
+source /etc/profile.d/go.sh
+
+# Add go to sudo's PATH
+# "/usr/local/go/bin:" to the `secure_path=` variable
+sudo visudo
+
+# Confirm go is in $PATH
+go version
+sudo go version
+
+# Clone RITA from GitHub
+git clone https://github.com/activecm/rita.git
+cd rita
+# `make` will produce a rita binary in the current working directory
+make
+
+# to install the binary to /usr/local/bin/rita:
+sudo make install
+# or to install to a different location:
+sudo PREFIX=/ make install
+
+# RITA requires a few directories to be created for it to function correctly.
+# https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md#configuring-the-system
+sudo mkdir /etc/rita && sudo chmod 755 /etc/rita
+sudo mkdir -p /var/lib/rita/logs && sudo chmod -R 755 /var/lib/rita
+sudo cp ./etc/rita.yaml /etc/rita/config.yaml && sudo chmod 644 /etc/rita/config.yaml
+
+# modify the config file as needed and test using the `rita test-config` command
+sudo rita test-config
+```
+
+### Ubuntu 20.04 x86_64 and arm64
+
+```bash
+# Install Zeek
+# You can use [docker-zeek](https://github.com/activecm/docker-zeek), or the precompiled binary for 20.04 on x86_64
+
+# https://docs.zeek.org/en/v4.1.1/install.html
+sudo apt-get update
+sudo apt-get install -y python3-git python3-semantic-version
+
+# https://software.opensuse.org/download.html?project=security%3Azeek&package=zeek
+curl -fsSL 'https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key' > ./zeek-release.key
+gpg --with-fingerprint --keyid-format long ./zeek-release.key | grep 'AAF3 EB04 4C49 C402 A9E7  B9AE 69D1 B2AA EE3D 166A'
+
+echo "deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /" | sudo tee /etc/apt/sources.list.d/security:zeek.list > /dev/null
+gpg --dearmor < ./zeek-release.key | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+
+sudo apt-get update
+sudo apt-get install zeek
+
+# Confirm Zeek config is valid
+sudo /opt/zeek/bin/zeekctl check
+sudo /opt/zeek/bin/zeekctl deploy
+
+# Allow zkg packages to be installed
+sudo sed -i 's/^.*@load packages.*$/@load packages/' /opt/zeek/share/zeek/site/local.zeek
+
+# Install the zeek-open-connections plugin
+# https://github.com/activecm/zeek-open-connections/
+# https://docs.zeek.org/projects/package-manager/en/stable/quickstart.html
+sudo /opt/zeek/bin/zkg refresh
+sudo /opt/zeek/bin/zkg install zeek/activecm/zeek-open-connections
+sudo /opt/zeek/bin/zeekctl deploy
+
+# Create the following PATH file at /etc/profile.d/zeek-path.sh
+if [ -d /opt/zeek/ ] ; then
+    PATH="/opt/zeek/bin:$PATH"
+fi
+
+# Install docker
+# https://docs.docker.com/engine/install/ubuntu/
+sudo apt-get install -y ca-certificates curl gnupg lsb-release
+curl -fsSL 'https://download.docker.com/linux/ubuntu/gpg' > docker-archive-keyring.gpg
+gpg --keyid-format long ./docker-archive-keyring.gpg | grep '9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88'
+
+gpg --dearmor < ./docker-archive-keyring.gpg | sudo tee /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install docker-ce docker-ce-cli containerd.io
+
+# Install docker-compose
+# Replace '1.29.2' with your preferred version from the releases: https://github.com/docker/compose/releases
+curl -fsSLO "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)"
+curl -fsSLO "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m).sha256"
+sha256sum -c ./docker-compose-Linux-x86_64.sha256
+
+sudo chown root:root ./docker-compose-Linux-x86_64
+sudo chmod 755 ./docker-compose-Linux-x86_64
+sudo mv ./docker-compose-Linux-x86_64 /usr/local/bin/docker-compose
+
+# Ensure binary is in PATH and works
+docker-compose --version
+
+# Install RITA with MongoDB using docker and docker-compose
+# https://github.com/activecm/rita/blob/master/docs/Docker%20Usage.md
+sudo docker pull quay.io/activecm/rita
+
+# Create the RITA and docker-compose config files
+sudo mkdir -p /etc/rita
+sudo curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/etc/rita.yaml' > /etc/rita/config.yaml
+sudo curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/docker-compose.yml' > /etc/rita/docker-compose.yml
+
+# Create the following docker environment configuration file at /etc/rita/rita.env
+# Change the VERSION and LOGS variables as needed for your environment
+# https://github.com/activecm/rita/blob/master/docs/Docker%20Usage.md#running-rita-with-docker-compose
+CONFIG=/etc/rita/rita.yaml
+VERSION=v4.4.0
+LOGS=/opt/zeek/logs/current
+
+# The docker-specific configuration files 'docker-compose.yml' and 'rita.env' are placed in /etc/rita for this example.
+# You will need to cd to /etc/rita/ to run the docker commands.
+# https://docs.docker.com/compose/compose-file/compose-file-v3/#service-configuration-reference
+
+# Ensure container runs successfully
+cd /etc/rita
+sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita --version
+
+# The path for the LOGS variable in /etc/rita/rita.env must be to the exact directory of the log files for the given day (how Zeek rotates logging)
+# /opt/zeek/logs/yyyy-mm-dd
+# or
+# /opt/zeek/logs/current
+# and is then called from the CLI as /logs
+sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs db_1
+
+# Show DNS
+sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita show-exploded-dns db_1
+sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita show-exploded-dns db_1 -H | less -S    # move the less interface around with the arrow-keys if terminal output is messy at first
+```
+
 
 ## Installing Bettercap from Pre-Compiled Binaries (Github)
 
 <https://www.bettercap.org/installation/>
+
+Note that for Raspberry Pi installs, the bettercap binary and checksum are for aarch64. Otherwise, the steps are remain the same.
 
 ```bash
 # Check for the latest version: https://github.com/bettercap/bettercap/releases/latest
