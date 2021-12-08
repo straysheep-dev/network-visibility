@@ -177,9 +177,9 @@ fi
 
 # Install RITA from source
 # https://go.dev/doc/install
-curl -fsSLO 'https://go.dev/dl/go1.17.4.linux-amd64.tar.gz'
+curl -fsSLO 'https://go.dev/dl/go1.17.4.linux-arm64.tar.gz'
 sha256sum go1.17.4.linux-arm64.tar.gz | grep 'adab2483f644e2f8a10ae93122f0018cef525ca48d0b8764dae87cb5f4fd4206'
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.17.4.linux-amd64.tar.gz
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.17.4.linux-arm64.tar.gz
 
 # Create the following PATH file at /etc/profile.d/go.sh
 if [ -d "/usr/local/go" ] ; then
@@ -189,8 +189,8 @@ fi
 # Source the updated PATH
 source /etc/profile.d/go.sh
 
-# Add go to sudo's PATH
-# "/usr/local/go/bin:" to the `secure_path=` variable
+# Add go to sudo's PATH by executing `sudo visudo` and adding
+# '/usr/local/go/bin:' to the `secure_path=` variable (without single quotes)
 sudo visudo
 
 # Confirm go is in $PATH
@@ -210,6 +210,7 @@ sudo PREFIX=/ make install
 
 # RITA requires a few directories to be created for it to function correctly.
 # https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md#configuring-the-system
+# RITA may create some directories automatically during `sudo make install` as well.
 sudo mkdir /etc/rita && sudo chmod 755 /etc/rita
 sudo mkdir -p /var/lib/rita/logs && sudo chmod -R 755 /var/lib/rita
 sudo cp ./etc/rita.yaml /etc/rita/config.yaml && sudo chmod 644 /etc/rita/config.yaml
