@@ -129,7 +129,11 @@ sudo ./gen-node-cfg.sh
 
 # Export Zeek version
 # https://github.com/activecm/docker-zeek#zeek-version
+# https://github.com/activecm/docker-zeek#supported-docker-tags
 echo "export zeek_release=latest" | sudo tee -a /etc/profile.d/zeek.sh
+# or
+echo "export zeek_release='3.0'" | sudo tee -a /etc/profile.d/zeek.sh
+# then:
 source /etc/profile.d/zeek.sh
 
 # Start docker-zeek
@@ -138,6 +142,15 @@ source /etc/profile.d/zeek.sh
 /usr/local/bin/zeek stop
 # Enable docker-zeek to automatically restart itself
 /usr/local/bin/zeek enable
+# Check status
+/usr/local/bin/zeek status
+# Check version
+sudo docker exec -it zeek zeek --version
+# To change versions, modify /etc/profile.d/zeek.sh and `source /etc/profile.d/zeek.sh`
+# or export a different version tag, then:
+/usr/local/bin/zeek restart
+# Review versions you have in docker:
+sudo docker image list
 
 # Install the zeek-open-connections plugin
 # https://github.com/activecm/zeek-open-connections/
