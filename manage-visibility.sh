@@ -193,6 +193,10 @@ function InstallDocker() {
         # Allow user to confirm
         apt-get install docker-ce docker-ce-cli containerd.io
     fi
+    
+    if ! (systemctl is-active docker); then
+        systemctl restart docker
+    fi
 
     if (command -v docker > /dev/null); then
         echo -e "${BLUE}[i]Getting docker verison information...${RESET}"
@@ -659,6 +663,10 @@ function InstallRITAFromScript() {
 
 function InstallRITAFromSource() {
 
+    echo -e "${BLUE}[i]Installing RITA from source...${RESET}"
+    sleep 1
+    echo -e "${BLUE}[i]Downloading go from https://go.dev/dl/...${RESET}"
+    
     # https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md
 
     ## Install go and add to PATH
@@ -725,7 +733,7 @@ function InstallRITAFromSource() {
     git clone 'https://github.com/activecm/rita.git'
     cd rita || exit 1
 
-    echo -e "${BLUE}[i]Buidling and installing RITA...${RESET}"
+    echo -e "${BLUE}[i]Building and installing RITA...${RESET}"
     sleep 2
 
     # this yields a rita binary in cwd
@@ -754,7 +762,13 @@ function InstallRITAFromSource() {
 
     # modify the config file as needed and test using the rita test-config command
     if (command -v rita > /dev/null); then
+        echo -e "${BLUE}[i]Testing RITA configuration...${RESET}"
+        sleep 2
         rita test-config
+        sleep 1
+        echo -e "${BLUE}[i]Done.${RESET}"
+        sleep 1
+        rita --version
         echo -e "${BLUE}[✓]Rita installed.${RESET}"
     else
         echo -e "${RED}[i]Error in /etc/rita/config.yaml, quitting...${RESET}"
@@ -1119,9 +1133,9 @@ function StartServices() {
     # Checks for packet-forwarding.service
     if [ -e /etc/systemd/system/packet-forwarding.service ]; then
         if (systemctl is-active --quiet packet-forwarding.service); then
-            echo "[i]packet-forwarding.service already running."
+            echo "${BLUE}[i]packet-forwarding.service already running.${RESET}"
         elif (systemctl is-enabled --quiet packet-forwarding.service); then
-            echo "[i]restarting packet-forwarding.service..."
+            echo "${BLUE}[i]restarting packet-forwarding.service...${RESET}"
             systemctl restart packet-forwarding
         else
             systemctl enable packet-forwarding
@@ -1132,9 +1146,9 @@ function StartServices() {
     # Checks for bettercap-arp-antidote.service
     if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
         if (systemctl is-active --quiet bettercap-arp-antidote.service); then
-            echo "[i]bettercap-arp-antidote.service already running."
+            echo "${BLUE}[i]bettercap-arp-antidote.service already running.${RESET}"
         elif (systemctl is-enabled --quiet bettercap-arp-antidote.service); then
-            echo "[i]restarting bettercap-arp-antidote.service..."
+            echo "${BLUE}[i]restarting bettercap-arp-antidote.service...${RESET}"
             systemctl restart bettercap-arp-antidote
         else
             systemctl enable bettercap-arp-antidote
@@ -1315,9 +1329,18 @@ function UninstallZeek() {
 
     if [ -e /opt/zeek/bin/zeekctl ]; then
         /opt/zeek/bin/zeekctl stop
-        echo -e "${BLUE}[i]${RESET}Waiting 30s for zeek processes to stop..."
+        echo -e "${BLUE}[i]Waiting 30s for zeek processes to stop...${RESET}"
         sleep 30
         apt-get autoremove --purge zeek
+        rm -rf /opt/zeek/etc/*
+    fi
+
+    if [ -e /usr/local/zeek/bin/zeekctl ]; then
+        /usr/local/zeek/bin/zeekctl stop
+        echo -e "${BLUE}[i]Waiting 30s for zeek processes to stop...${RESET}"
+        sleep 30
+        apt-get autoremove --purge zeek
+        rm -rf /usr/local/zeek/etc/*
     fi
 
     if [ -e /usr/local/bin/zeek ]; then
@@ -1417,6 +1440,7 @@ function EchoStatus() {
         source /etc/profile.d/zeek.sh
     fi
     # Zeek PATH
+    ZEEK_PATH=''
     if [ -e /usr/local/zeek/etc/node.cfg ]; then
         ZEEK_PATH=/usr/local/zeek
     elif [ -e /opt/zeek/etc/node.cfg ]; then
@@ -1427,9 +1451,9 @@ function EchoStatus() {
         echo -e "    ${BOLD}●${RESET} zeek not installed"
     elif [ -e /usr/local/bin/zeek ]; then
         if (docker exec -it zeek zeekctl status > /dev/null); then
-            echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}"
+            echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
         else
-            echo -e "    ${BOLD}●${RESET} zeek inactive, crashed, or not shown"
+            echo -e "    ${BOLD}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
         fi
     elif (zeekctl status > /dev/null); then
         echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
@@ -1505,7 +1529,7 @@ function InstallZeek() {
             MakeTemp
             ConfigureZeek
         else
-            echo -e "${BLUE}[i]Zeek already installed."
+            echo -e "${BLUE}[i]Zeek already installed.${RESET}"
         fi
     elif [ -e /opt/zeek/etc/node.cfg ]; then
         ZEEK_PATH=/opt/zeek
@@ -1513,7 +1537,7 @@ function InstallZeek() {
             MakeTemp
             ConfigureZeek
         else
-            echo -e "${BLUE}[i]Zeek already installed."
+            echo -e "${BLUE}[i]Zeek already installed.${RESET}"
         fi
     elif ! (command -v zeek > /dev/null); then
         CheckOS
@@ -1540,7 +1564,7 @@ function InstallZeek() {
         CleanUp
         EchoStatus
     else
-        echo -e "${BLUE}[i]Zeek already installed."
+        echo -e "${BLUE}[i]Zeek already installed.${RESET}"
     fi
 
 }
