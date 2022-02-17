@@ -790,7 +790,17 @@ function InstallRITAFromDocker() {
         elif [ -e /usr/local/zeek ]; then
         ZEEK_PATH=/usr/local/zeek
         else
-        ZEEK_PATH="#ZEEK_PATH"
+            echo "No known PATH for Zeek exists."
+            echo "Where should the LOGS variable in /etc/rita/rita.env point to?"
+            echo "Note: only use [a-zA-Z0-9_-] in the PATH"
+
+            until [[ $SET_ZEEK_PATH =~ ^(/[a-zA-Z0-9_-]+){1,}$ ]]; do
+                read -rp "Path to Zeek logs: " SET_ZEEK_PATH
+            done
+            ZEEK_PATH="$SET_ZEEK_PATH"
+            echo "ZEEK_PATH=$ZEEK_PATH"
+            echo ""
+            echo "${BOLD}[i]Change this value later in ${YELLOW}/etc/rita/rita.env${RESET}"
         fi
 
         # https://github.com/activecm/rita/blob/master/docs/Docker%20Usage.md
@@ -805,18 +815,18 @@ VERSION=v$RITA_VER
 LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
 
         echo -e ""
-        echo -e "${BOLD}[i]LOG variable set to $ZEEK_PATH/logs/current${RESET}"
+        echo -e "${BOLD}[i]LOG variable set to ${YELLOW}$ZEEK_PATH/logs/current${RESET}"
         echo -e ""
-        echo -e "${BOLD}   This variable must be an exact log path, such as /opt/zeek/logs/yyyy-mm-dd or /opt/zeek/logs/current${RESET}"
-        echo -e "${BOLD}   and is then called from the CLI as /logs${RESET}"
+        echo -e "${BOLD}   This variable must be an exact log path, such as ${YELLOW}/opt/zeek/logs/yyyy-mm-dd${BOLD} or ${YELLOW}/opt/zeek/logs/current${RESET}"
+        echo -e "${BOLD}   and is then called from the CLI as ${YELLOW}/logs${RESET}"
         sleep 2
         echo -e ""
         echo -e "${BOLD}EXAMPLE:${RESET}"
-        echo -e "${BOLD}   cd /etc/rita${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs db_1${RESET}"
+        echo -e "${YELLOW}   cd /etc/rita${RESET}"
+        echo -e "${YELLOW}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
-        echo -e "${BLUE}[i]ZEEK_PATH/logs/current works well for scheduled cron jobs.${RESET}"
-        echo -e "${BOLD}Review: https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md${RESET}"
+        echo -e "${BOLD[i]ZEEK_PATH/logs/current works well for scheduled cron jobs.${RESET}"
+        echo -e "${BOLD}See: https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md for more details${RESET}"
         sleep 2
 
         curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/etc/rita.yaml' > /etc/rita/config.yaml
@@ -840,14 +850,27 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
     # Must cd to docker-compose file directory, else:
     # * unable to prepare context: unable to evaluate symlinks in Dockerfile path: lstat /etc/rita/Dockerfile: no such file or directory
     cd /etc/rita || exit 1
-    docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita --version
-    if [ "$?" -eq "0" ]; then
+    if (sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
         echo -e "${BLUE}[✓]RITA docker image installed.${RESET}"
     else
-        echo -e "${RED}[i]Error running RITA via docker, quitting...${RESET}"
+        echo -e "${RED}[i]Error running RITA via docker, try running the following commands manually:${RESET}"
+        echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
+        echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
         exit 1
     fi
-
+    echo ""
+    echo "${BOLD}EXAMPLE USAGE:${RESET}"
+    echo ""
+    sleep 1
+    echo "Import a directory of *.gz Zeek log files to databse db_1:"
+    echo "${YELLOW}sudo su${RESET}"
+    echo "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
+    echo "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
+    echo ""
+    echo "Import multiple diretories of YYYY-MM-DD/*.gz Zeek log files to database db_1:"
+    echo "${YELLOW}sudo su${RESET}"
+    echo "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS="$logs"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+    sleep 5
 }
 
 function InstallBettercapFromRelease() {
@@ -1207,7 +1230,7 @@ function EnableRollingImports() {
     cat /etc/cron.d/rita
 
     echo ""
-    echo -e "${BLUE}[?]Schedule a cron task for RITA to import Zeek logs on an hourly basis?${RESET}"
+    echo -e "${BLUE}[?]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the database provided)${RESET}"
     until [[ $CRON_CHOICE =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " CRON_CHOICE
     done
