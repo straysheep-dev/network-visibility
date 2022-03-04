@@ -800,7 +800,7 @@ function InstallRITAFromDocker() {
             ZEEK_PATH="$SET_ZEEK_PATH"
             echo "ZEEK_PATH=$ZEEK_PATH"
             echo ""
-            echo "${BOLD}[i]Change this value later in ${YELLOW}/etc/rita/rita.env${RESET}"
+            echo -e "${BOLD}[i]Change this value later in ${YELLOW}/etc/rita/rita.env${RESET}"
         fi
 
         # https://github.com/activecm/rita/blob/master/docs/Docker%20Usage.md
@@ -825,7 +825,7 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         echo -e "${YELLOW}   cd /etc/rita${RESET}"
         echo -e "${YELLOW}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
-        echo -e "${BOLD[i]ZEEK_PATH/logs/current works well for scheduled cron jobs.${RESET}"
+        echo -e "${BOLD}[i]$ZEEK_PATH/logs/current works well for scheduled cron jobs.${RESET}"
         echo -e "${BOLD}See: https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md for more details${RESET}"
         sleep 2
 
@@ -858,18 +858,18 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
         exit 1
     fi
-    echo ""
-    echo "${BOLD}EXAMPLE USAGE:${RESET}"
-    echo ""
+    echo -e ""
+    echo -e "${BOLD}EXAMPLE USAGE:${RESET}"
+    echo -e ""
     sleep 1
-    echo "Import a directory of *.gz Zeek log files to databse db_1:"
-    echo "${YELLOW}sudo su${RESET}"
-    echo "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
-    echo "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
-    echo ""
-    echo "Import multiple diretories of YYYY-MM-DD/*.gz Zeek log files to database db_1:"
-    echo "${YELLOW}sudo su${RESET}"
-    echo "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS="$logs"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+    echo -e "Import a directory of *.gz Zeek log files to databse db_1:"
+    echo -e "${YELLOW}sudo su${RESET}"
+    echo -e "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
+    echo -e "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
+    echo -e ""
+    echo -e "Import multiple diretories of YYYY-MM-DD/*.gz Zeek log files to database db_1:"
+    echo -e "${YELLOW}sudo su${RESET}"
+    echo -e "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS="$logs"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
     sleep 5
 }
 
@@ -1226,16 +1226,13 @@ function EnableRollingImports() {
 
     # https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md
 
-    echo -e "${BLUE}[i]Currently scheduled cron tasks:${RESET}"
-    cat /etc/cron.d/rita
-
     echo ""
-    echo -e "${BLUE}[?]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the database provided)${RESET}"
-    until [[ $CRON_CHOICE =~ ^(y|n)$ ]]; do
-        read -rp "[y/n]? " CRON_CHOICE
+    echo -e "${BLUE}[?]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the given database)${RESET}"
+    until [[ $RITA_CRON_CHOICE =~ ^(y|n)$ ]]; do
+        read -rp "[y/n]? " RITA_CRON_CHOICE
     done
 
-    if [[ $CRON_CHOICE == "y" ]]; then
+    if [[ $RITA_CRON_CHOICE == "y" ]]; then
         echo -e ""
         echo -e "Enter a name for the database."
         echo -e ""
@@ -1266,11 +1263,90 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin" > /etc/cron.d
 
 }
 
+function EnableZeekCron() {
+
+    if [ -e /usr/local/bin/zeek ]; then
+        echo -e "${BLUE}[i]${RESET}docker-zeek's cron task is enabled by default. Exiting..."
+        exit 1
+    fi
+
+    # https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command
+
+    echo ""
+    echo -e "${BLUE}[?]Enable Zeek cron (only for non-docker Zeek installations)?${RESET}"
+    echo -e "${BLUE}This will check the Zeek process every 5 minutes, and restart it if it's crashed.${RESET}"
+    echo -e "${BLUE}[i]https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command${RESET}"
+    until [[ $ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
+        read -rp "[y/n]? " ZEEK_CRON_CHOICE
+    done
+
+    if [[ $ZEEK_CRON_CHOICE == "y" ]]; then
+
+        "$ZEEK_PATH"/bin/zeekctl cron enable > /dev/null
+
+        echo "# /etc/cron.d/zeek: crontab entries for non-docker zeek binaries to automatically restart if crashed
+
+SHELL=/bin/bash
+PATH=$ZEEK_PATH/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+*/5 *   * * *   root  $ZEEK_PATH/bin/zeekctl cron" > /etc/cron.d/zeek
+    
+        echo ""
+        cat /etc/cron.d/zeek
+
+        echo ""
+        echo -e "${BLUE}[✓]New task scheduled under /etc/cron.d/zeek.${RESET}"
+    elif [[ $ZEEK_CRON_CHOICE == "n" ]]; then
+
+        echo -e "${BLUE}[?]Remove Zeek cron?${RESET}"
+        until [[ $REMOVE_ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
+            read -rp "[y/n]? " REMOVE_ZEEK_CRON_CHOICE
+        done
+
+        if [[ $REMOVE_ZEEK_CRON_CHOICE == "y" ]]; then
+            "$ZEEK_PATH"/bin/zeekctl cron disable > /dev/null
+            rm /etc/cron.d/zeek
+            echo -e "${BLUE}[i]/etc/cron.d/zeek removed.${RESET}"
+        fi
+    fi
+
+
+}
+
 function ManageCronTasks() {
 
     # To do:
     # This section will need improved functionality
-    EnableRollingImports
+
+    echo -e "${BLUE}[i]Currently scheduled cron tasks:${RESET}"
+    if ! (cat /etc/cron.d/rita); then
+        echo -e "${YELLOW}[i]No cron entry for RITA.${RESET}"
+    fi
+    if ! (cat /etc/cron.d/zeek); then
+        echo -e "${YELLOW}[i]No cron entry for Zeek.${RESET}"
+    fi
+
+    echo -e ""
+    echo -e "What would you like to do?"
+    echo -e ""
+    echo -e "   1) Manage RITA cron tasks"
+    echo -e "   2) Manage Zeek cron tasks"
+    echo -e "   3) Exit"
+    until [[ $CRON_MENU_OPTION =~ ^[1-3]$ ]]; do
+        read -rp "Select an option [1-3]: " CRON_MENU_OPTION
+    done
+
+    case $CRON_MENU_OPTION in
+    1)
+        EnableRollingImports
+        ;;
+    2)
+        EnableZeekCron
+        ;;
+    3)
+        exit 0
+        ;;
+    esac
 
 }
 
@@ -1351,6 +1427,7 @@ function UninstallMongoDBFromApt() {
 function UninstallZeek() {
 
     if [ -e /opt/zeek/bin/zeekctl ]; then
+        /opt/zeek/bin/zeekctl cron disable
         /opt/zeek/bin/zeekctl stop
         echo -e "${BLUE}[i]Waiting 30s for zeek processes to stop...${RESET}"
         sleep 30
@@ -1359,6 +1436,7 @@ function UninstallZeek() {
     fi
 
     if [ -e /usr/local/zeek/bin/zeekctl ]; then
+        /usr/local/zeek/bin/zeekctl cron disable
         /usr/local/zeek/bin/zeekctl stop
         echo -e "${BLUE}[i]Waiting 30s for zeek processes to stop...${RESET}"
         sleep 30
@@ -1372,6 +1450,9 @@ function UninstallZeek() {
         docker image rm activecm/zeek
         sleep 2
         rm /usr/local/bin/zeek
+    fi
+    if [ -e /etc/cron.d/zeek ]; then
+        rm /etc/cron.d/zeek
     fi
     echo -e "${BLUE}[✓]Zeek uninstalled.${RESET}"
 
@@ -1388,11 +1469,12 @@ function UninstallRITA() {
             docker rmi mongo:4.2
         fi
     fi
-    if [ -e /etc/rita -o -e /var/lib/rita -o -e /usr/local/bin/rita -o -e /usr/local/etc/rita ]; then
-        rm -rf /etc/rita
-        rm -rf /var/lib/rita
-        rm -rf /usr/local/bin/rita
-        rm -rf /usr/local/etc/rita
+    if [ -e /etc/rita -o -e /var/lib/rita -o -e /usr/local/bin/rita -o -e /usr/local/etc/rita -o -e /etc/cron.d/rita]; then
+        rm -rf /etc/rita 2>/dev/null
+        rm -rf /var/lib/rita 2>/dev/null
+        rm -rf /usr/local/bin/rita 2>/dev/null
+        rm -rf /usr/local/etc/rita 2>/dev/null
+        rm -rf /etc/cron.d/rita 2>/dev/null
     fi
     echo -e "${BLUE}[✓]RITA uninstalled.${RESET}"
 
@@ -1475,6 +1557,8 @@ function EchoStatus() {
     elif [ -e /usr/local/bin/zeek ]; then
         if (docker exec -it zeek zeekctl status > /dev/null); then
             echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
+            # https://github.com/activecm/docker-zeek#readme
+            echo -e "        ${BLUE}●${RESET} zeek cron enabled via docker image by default"
         else
             echo -e "    ${BOLD}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
         fi
@@ -1482,6 +1566,11 @@ function EchoStatus() {
         echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
     else
         echo -e "    ${BOLD}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
+    fi
+    if [ -e /etc/cron.d/zeek ]; then
+        echo -e "        ${BLUE}●${RESET} zeek $($ZEEK_PATH/bin/zeekctl cron ?)"
+    else
+        echo -e "        ${BOLD}●${RESET} zeek cron not enabled"
     fi
 
     # RITA
@@ -1492,6 +1581,11 @@ function EchoStatus() {
         echo -e "    ${BLUE}●${RESET} mongodb docker image installed"
     else
         echo -e "    ${BOLD}●${RESET} rita not installed"
+    fi
+    if [ -e /etc/cron.d/rita ]; then
+        echo -e "        ${BLUE}●${RESET} rita cron enabled"
+    else
+        echo -e "        ${BOLD}●${RESET} rita cron not enabled"
     fi
 
     # MongoDB
