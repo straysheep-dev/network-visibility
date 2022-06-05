@@ -2,11 +2,11 @@
 
 # need to add a passive method of network monitoring as a serivce, and a way to choose which to enable between bettercap, and passive (as well as any others added in the future)
 # needs a sendmail configuration
-# need to ensure zeek cron is running on all installations
-# add a function to manage cron + rolling database imports for RITA
 # need to review how many logs Zeek stores, and for how long:
 # https://docs.zeek.org/en/master/frameworks/logging.html?highlight=rotate#log-rotation-and-post-processing
 # assume Zeek will write logs to zeek/logs/* until there is no disk space left
+
+# https://www.activecountermeasures.com/why-is-my-program-running-slowly/
 
 # Setup bettercap and the necesary services for intercepting traffic on a RITA server or desktop vm
 # Version=0.3 (tested on 18.04.6, 20.04.3, Desktop, Server, Raspberry Pi 4B-8GB)
@@ -171,7 +171,7 @@ function InstallDocker() {
 
         curl -fsSL 'https://download.docker.com/linux/ubuntu/gpg' > "$SETUPDIR"/docker-archive-keyring.gpg
 
-        gpg --with-fingerprint --keyid-format long "$SETUPDIR"/docker-archive-keyring.gpg | grep '9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88'
+        apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR"/docker-archive-keyring.gpg 2>/dev/null| grep '9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88'
 
         # User to manually compare keyid's
         echo -e ""
@@ -262,7 +262,7 @@ function InstallMongoDBFromApt() {
     if ! [ -e /etc/apt/sources.list.d/mongodb-org-4.2.list ]; then
         curl -fsSLO https://www.mongodb.org/static/pgp/server-4.2.asc
 
-        gpg --with-fingerprint --keyid-format long "$SETUPDIR/server-4.2.asc" | grep 'E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B'
+        apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR/server-4.2.asc" 2>/dev/null | grep 'E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B'
 
         # User to manually compare keyid's
         echo ""
@@ -318,9 +318,9 @@ function InstallZeekFromApt() {
 
     if ! [ -e /etc/apt/trusted.gpg.d/security_zeek.gpg ]; then
         # https://software.opensuse.org/download.html?project=security%3Azeek&package=zeek
-        curl -Lf "https://download.opensuse.org/repositories/security:zeek/xUbuntu_$UBUNTU_VERSION/Release.key" > "$SETUPDIR/zeek-release.key"
+        curl -fsSL "https://download.opensuse.org/repositories/security:zeek/xUbuntu_$UBUNTU_VERSION/Release.key" > "$SETUPDIR/zeek-release.key"
 
-        gpg --with-fingerprint --keyid-format long "$SETUPDIR"/zeek-release.key | grep 'AAF3 EB04 4C49 C402 A9E7  B9AE 69D1 B2AA EE3D 166A'
+        apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR"/zeek-release.key 2>/dev/null | grep 'AAF3 EB04 4C49 C402 A9E7  B9AE 69D1 B2AA EE3D 166A'
 
         # User to manually compare keyid's
         echo ""
