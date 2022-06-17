@@ -474,159 +474,166 @@ function InstallZeekFromDocker() {
         mv "$installer" /usr/local/bin
 
         mkdir -p /opt/zeek/etc
+    done
 
-    ## Configure Zeek
-    # https://docs.zeek.org/en/v4.1.1/quickstart.html
+}
 
-    # Zeek configured to be a self-contained cluster vs standalone
-    # Taken directly from: https://github.com/activecm/rita/blob/4a4b6394a6fb2619ba91e0112e94a54f0653808a/install.sh#L317
+function AddZeekToPath() {
+    # APT
+    if [ "$ARCH" == 'amd64' ]; then
+        # Add Zeek to PATH
+        {
+        echo ""
+        echo "# set PATH so it includes user's zeek installation if it exists"
+        echo "if [ -d $ZEEK_PATH ] ; then"
+        echo "    PATH=\"$ZEEK_PATH/bin:$PATH\""
+        echo "fi"
+        } > /etc/profile.d/zeek-path.sh
+    fi
+    # DOCKER
+    # https://github.com/activecm/docker-zeek#zeek-version
+    if [ "$ARCH" == 'arm64' ]; then
+        echo "export zeek_release=latest" | tee /etc/profile.d/zeek.sh
+        source /etc/profile.d/zeek.sh
+    fi
+}
 
-    # Attempt to detect if Zeek is already configured away from its defaults
-    if ! (grep -q '^type=worker' "$ZEEK_PATH/etc/node.cfg") ; then
-        # Configure Zeek
-        echo -e "${BLUE}[i]Downloading node.cfg configuration files...${RESET}"
+function InstallNodeCfgScript() {
+
+    if ! [ -e "$ZEEK_PATH"/share/zeek-cfg ]; then
+        mkdir -p "$ZEEK_PATH"/share/zeek-cfg
+    fi
+
+    if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh ]; then
+        echo -e "${BLUE}[i]Downloading gen-node-cfg.sh...${RESET}"
         curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh" -o "$SETUPDIR/gen-node-cfg.sh"
-        curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" -o "$SETUPDIR/node.cfg-template"
-
         echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
-        # Check against known hash
+        # Check against known hashes
         if ! (sha256sum "$SETUPDIR/gen-node-cfg.sh" | grep -x "$ZEEK_GEN_CFG_HASH  $SETUPDIR/gen-node-cfg.sh"); then
             echo "${RED}Bad checksum, quitting...${RESET}"
             exit 1
         else
             echo -e "${GREEN}OK${RESET}"
+            echo -e "${YELLOW}[i]Moving $SETUPDIR/gen-node-cfg.sh    ->  $ZEEK_PATH/share/zeek-cfg/gen-node-cfg.sh${RESET}"
+            chmod 755 "$SETUPDIR"/gen-node-cfg.sh
+            mv "$SETUPDIR"/gen-node-cfg.sh "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh
         fi
+    fi
+    if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template ]; then
+        echo -e "${BLUE}[i]Downloading node.cfg-template...${RESET}"
+        curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" -o "$SETUPDIR/node.cfg-template"
         if ! (sha256sum "$SETUPDIR/node.cfg-template" | grep -x "$ZEEK_NODE_CFG_HASH  $SETUPDIR/node.cfg-template"); then
             echo "${RED}Bad checksum, quitting...${RESET}"
             exit 1
         else
             echo -e "${GREEN}OK${RESET}"
+            echo -e "${YELLOW}[i]Moving $SETUPDIR/node.cfg-template  ->  $ZEEK_PATH/share/zeek-cfg/node.cfg-template${RESET}"
+            chmod 644 "$SETUPDIR"/node.cfg-template
+            mv "$SETUPDIR"/node.cfg-template "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template
         fi
-
-        echo -e "${BLUE}[i]Running the node.cfg configuration script RITA's installer uses to complete Zeek setup...${RESET}"
-        sleep 2
-        chmod 755 "$SETUPDIR/gen-node-cfg.sh"
-        if ! "$SETUPDIR/gen-node-cfg.sh" ; then
-            echo "${BOLD}[i]Automatic Zeek configuration failed.${RESET}"
-            echo "${BOLD}[i]Please edit /opt/zeek/etc/node.cfg and run${RESET}"
-            echo "${BOLD}[i]'sudo zeekctl deploy' to start Zeek.${RESET}"
-            echo "${BOLD}[i]Pausing for 20 seconds before continuing.${RESET}"
-            sleep 20
-        fi
-    fi
-
-        # https://github.com/activecm/docker-zeek#zeek-version
-        echo "export zeek_release=latest" | tee -a /etc/profile.d/zeek.sh
-        source /etc/profile.d/zeek.sh
-
-        sleep 2
-        /usr/local/bin/zeek start
-        sleep 2
-    done
-
-    # To install the plugin for open or long-running connections:
-    # https://github.com/activecm/docker-zeek#install-a-plugin
-    if ! (docker exec -it zeek zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
-        echo -e "${BLUE}[i]Refreshing zkg packages...${RESET}"
-        docker exec -it zeek zkg refresh
-        echo -e "${BLUE}[i]Installing zeek-open-connections...${RESET}"
-        docker exec -it zeek zkg install zeek/activecm/zeek-open-connections
-        /usr/local/bin/zeek restart
-    fi
-
-    # Print status
-    echo -e "${BLUE}[i]Getting Zeekctl status...${RESET}"
-    /usr/local/bin/zeek status
-    if [ "$?" -eq "0" ]; then
-        sleep 2
-        echo -e "${BLUE}[✓]Docker-Zeek installed and running.${RESET}"
-    else
-        echo -e "${RED}[i]Error getting Docker-Zeek status, quitting...${RESET}"
-        exit 1
     fi
 
 }
 
+function ConfigureNode() {
+    # APT & DOCKER
+    # Attempt to detect if Zeek is already configured away from it's defaults
+    # Taken directly from: https://github.com/activecm/rita/blob/4a4b6394a6fb2619ba91e0112e94a54f0653808a/install.sh#L317
+#    if ! (grep -q '^type=worker' "$ZEEK_PATH/etc/node.cfg") ; then
+ 
+    # Run the configuration script
+    echo -e "${BLUE}[i]Running the node.cfg configuration script RITA's installer uses to complete Zeek setup...${RESET}"
+    "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh
+}
+
+function InstallZkgPackages() {
+    # APT
+    if [ "$ARCH" == 'amd64' ]; then
+        # Edit $ZEEK_PATH/site/local.zeek file so that it contains the following line
+        if ! (grep -qx "^@load packages$" "$ZEEK_PATH"/share/zeek/site/local.zeek); then
+            sed -i 's/^.*@load packages.*$/@load packages/' "$ZEEK_PATH"/share/zeek/site/local.zeek
+        fi
+
+        # Install zeek-open-connections plugin for monitoring long-running, open connections
+        if ! ("$ZEEK_PATH"/bin/zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
+            echo -e "${BLUE}[i]Refreshing zkg packages...${RESET}"
+            "$ZEEK_PATH"/bin/zkg refresh
+            echo -e "${BLUE}[i]Installing zeek-open-connections...${RESET}"
+            "$ZEEK_PATH"/bin/zkg install zeek/activecm/zeek-open-connections
+        fi
+     fi
+    #DOCKER
+    if [ "$ARCH" == 'arm64' ]; then
+        # To install the plugin for open or long-running connections:
+        # https://github.com/activecm/docker-zeek#install-a-plugin
+        if ! (docker exec -it zeek zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
+            echo -e "${BLUE}[i]Refreshing zkg packages...${RESET}"
+            docker exec -it zeek zkg refresh
+            echo -e "${BLUE}[i]Installing zeek-open-connections...${RESET}"
+            docker exec -it zeek zkg install zeek/activecm/zeek-open-connections
+        fi
+    fi
+}
+
+function StartZeek() {
+    # APT
+    if [ "$ARCH" == 'amd64' ]; then
+        # Check the configuration
+        "$ZEEK_PATH"/bin/zeekctl check
+        # Deploy the configuration
+        "$ZEEK_PATH"/bin/zeekctl deploy
+
+        sleep 2
+        # Print status
+        echo -e "${BLUE}[i]Getting Zeekctl status...${RESET}"
+        "$ZEEK_PATH"/bin/zeekctl status
+        if [ "$?" -eq "0" ]; then
+            echo -e "${BLUE}[✓]Zeek installed and running.${RESET}"
+        else
+            echo -e "${RED}[i]Error getting Zeek status, quitting...${RESET}"
+            exit 1
+        fi
+    fi
+    # DOCKER
+    if [ "$ARCH" == 'arm64' ]; then
+        sleep 2
+        /usr/local/bin/zeek start
+        sleep 2
+        # Print status
+        echo -e "${BLUE}[i]Getting Zeekctl status...${RESET}"
+        /usr/local/bin/zeek status
+        if [ "$?" -eq "0" ]; then
+            sleep 2
+            echo -e "${BLUE}[✓]Docker-Zeek installed and running.${RESET}"
+        else
+            echo -e "${RED}[i]Error getting Docker-Zeek status, quitting...${RESET}"
+            exit 1
+        fi
+    fi
+}
+
 function ConfigureZeek() {
 
-    ## For monitoring long-running, open connections, you will need to install our zeek-open-connections plugin
-    if ! ("$ZEEK_PATH"/bin/zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
-        echo -e "${BLUE}[i]Refreshing zkg packages...${RESET}"
-        "$ZEEK_PATH"/bin/zkg refresh
-        echo -e "${BLUE}[i]Installing zeek-open-connections...${RESET}"
-        "$ZEEK_PATH"/bin/zkg install zeek/activecm/zeek-open-connections
-    fi
-
-    # Edit $ZEEK_PATH/site/local.zeek file so that it contains the following line
-    if ! (grep -qx "^@load packages$" "$ZEEK_PATH"/share/zeek/site/local.zeek); then
-        sed -i 's/^.*@load packages.*$/@load packages/' "$ZEEK_PATH"/share/zeek/site/local.zeek
-    fi
-
-    ## Configure Zeek
     # https://docs.zeek.org/en/v4.1.1/quickstart.html
 
-    # Zeek configured to be a self-contained cluster vs standalone
-    # Taken directly from: https://github.com/activecm/rita/blob/4a4b6394a6fb2619ba91e0112e94a54f0653808a/install.sh#L317
+    AddZeekToPath
 
-    # Attempt to detect if Zeek is already configured away from its defaults
-    if ! (grep -q '^type=worker' "$ZEEK_PATH/etc/node.cfg") ; then
-        # Configure Zeek
-        echo -e "${BLUE}[i]Downloading node.cfg configuration files...${RESET}"
-        curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh" -o "$SETUPDIR/gen-node-cfg.sh"
-        curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" -o "$SETUPDIR/node.cfg-template"
+    InstallNodeCfgScript
 
-        echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
-        # Check against known hash
-        if ! (sha256sum "$SETUPDIR/gen-node-cfg.sh" | grep -x "$ZEEK_GEN_CFG_HASH  $SETUPDIR/gen-node-cfg.sh"); then
-            echo "${RED}Bad checksum, quitting...${RESET}"
-            exit 1
-        else
-            echo -e "${GREEN}OK${RESET}"
-        fi
-        if ! (sha256sum "$SETUPDIR/node.cfg-template" | grep -x "$ZEEK_NODE_CFG_HASH  $SETUPDIR/node.cfg-template"); then
-            echo "${RED}Bad checksum, quitting...${RESET}"
-            exit 1
-        else
-            echo -e "${GREEN}OK${RESET}"
-        fi
-
-        echo -e "${BLUE}[i]Running the node.cfg configuration script RITA's installer uses to complete Zeek setup...${RESET}"
-        sleep 2
-        chmod 755 "$SETUPDIR/gen-node-cfg.sh"
-        if ! "$SETUPDIR/gen-node-cfg.sh" ; then
-            echo "${BOLD}[i]Automatic Zeek configuration failed.${RESET}"
-            echo "${BOLD}[i]Please edit /opt/zeek/etc/node.cfg and run${RESET}"
-            echo "${BOLD}[i]'sudo zeekctl deploy' to start Zeek.${RESET}"
-            echo "${BOLD}[i]Pausing for 20 seconds before continuing.${RESET}"
-            sleep 20
-        fi
+    until [[ $CONFIGURE_NODE_CHOICE =~ ^(y|n)$ ]]; do
+        read -rp "Run Zeek node configuration script? [y/n]: " -e CONFIGURE_NODE_CHOICE
+    done
+    if [[ "$CONFIGURE_NODE_CHOICE" == "y" ]]; then
+        ConfigureNode
     fi
 
-    # Check the configuration
-    "$ZEEK_PATH"/bin/zeekctl check
-    # Deploy the configuration
-    "$ZEEK_PATH"/bin/zeekctl deploy
+    InstallZkgPackages
 
-    sleep 2
-
-    # Add Zeek to PATH
-    {
-    echo ""
-    echo "# set PATH so it includes user's zeek installation if it exists"
-    echo "if [ -d $ZEEK_PATH ] ; then"
-    echo "    PATH=\"$ZEEK_PATH/bin:$PATH\""
-    echo "fi"
-    } >> /etc/profile.d/zeek-path.sh
-
-
-    # Print status
-    echo -e "${BLUE}[i]Getting Zeekctl status...${RESET}"
-    "$ZEEK_PATH"/bin/zeekctl status
-    if [ "$?" -eq "0" ]; then
-        echo -e "${BLUE}[✓]Zeek installed and running.${RESET}"
-    else
-        echo -e "${RED}[i]Error getting Zeek status, quitting...${RESET}"
-        exit 1
+    until [[ $START_ZEEK_CHOICE =~ ^(y|n)$ ]]; do
+        read -rp "Start Zeek now? [y/n]: " -e START_ZEEK_CHOICE
+    done
+    if [[ "$START_ZEEK_CHOICE" == "y" ]]; then
+        StartZeek
     fi
 
 }
@@ -847,17 +854,9 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         fi
     fi
 
-    # Must cd to docker-compose file directory, else:
-    # * unable to prepare context: unable to evaluate symlinks in Dockerfile path: lstat /etc/rita/Dockerfile: no such file or directory
-    cd /etc/rita || exit 1
-    if (sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
-        echo -e "${BLUE}[✓]RITA docker image installed.${RESET}"
-    else
-        echo -e "${RED}[i]Error running RITA via docker, try running the following commands manually:${RESET}"
-        echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
-        echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
-        exit 1
-    fi
+    # Example usage
+    echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
+    echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
     echo -e ""
     echo -e "${BOLD}EXAMPLE USAGE:${RESET}"
     echo -e ""
@@ -1639,24 +1638,11 @@ function InstallZeek() {
 
     echo -e "${BLUE}[i]Checking path for zeek...${RESET}"
 
-    # https://github.com/activecm/rita/blob/4a4b6394a6fb2619ba91e0112e94a54f0653808a/install.sh#L318
-    if [ -e /usr/local/zeek/etc/node.cfg ]; then
-        ZEEK_PATH=/usr/local/zeek
-        if ! (grep -q '^type=worker' "$ZEEK_PATH/etc/node.cfg") ; then
-            MakeTemp
-            ConfigureZeek
-        else
-            echo -e "${BLUE}[i]Zeek already installed.${RESET}"
-        fi
-    elif [ -e /opt/zeek/etc/node.cfg ]; then
-        ZEEK_PATH=/opt/zeek
-        if ! (grep -q '^type=worker' "$ZEEK_PATH/etc/node.cfg") ; then
-            MakeTemp
-            ConfigureZeek
-        else
-            echo -e "${BLUE}[i]Zeek already installed.${RESET}"
-        fi
-    elif ! (command -v zeek > /dev/null); then
+    if (command -v zeek > /dev/null); then
+        ConfigureZeek
+        exit 0
+    fi
+    if ! (command -v zeek > /dev/null); then
         CheckOS
 #        CheckInterface
         MakeTemp
@@ -1673,8 +1659,9 @@ function InstallZeek() {
         elif [ "$ARCH" == 'arm64' ]; then
             InstallDocker
             InstallZeekFromDocker
+            ConfigureZeek
         else
-            echo -e "${BOLD}[i]Architecture not yes tested, quitting.${RESET}"
+            echo -e "${BOLD}[i]Architecture not yet tested, quitting.${RESET}"
             exit 1
         fi
 
