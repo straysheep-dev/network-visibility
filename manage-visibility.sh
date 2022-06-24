@@ -822,7 +822,7 @@ VERSION=v$RITA_VER
 LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
 
         echo -e ""
-        echo -e "${BOLD}[i]LOG variable set to ${YELLOW}$ZEEK_PATH/logs/current${RESET}"
+        echo -e "[${BLUE}i${RESET}]LOG variable set to ${YELLOW}$ZEEK_PATH/logs/current${RESET}"
         echo -e ""
         echo -e "${BOLD}   This variable must be an exact log path, such as ${YELLOW}/opt/zeek/logs/yyyy-mm-dd${BOLD} or ${YELLOW}/opt/zeek/logs/current${RESET}"
         echo -e "${BOLD}   and is then called from the CLI as ${YELLOW}/logs${RESET}"
@@ -832,8 +832,9 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         echo -e "${YELLOW}   cd /etc/rita${RESET}"
         echo -e "${YELLOW}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
-        echo -e "${BOLD}[i]$ZEEK_PATH/logs/current works well for scheduled cron jobs.${RESET}"
+        echo -e "[${BLUE}i${RESET}]$ZEEK_PATH/logs/current works well for scheduled cron jobs."
         echo -e "${BOLD}See: https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md for more details${RESET}"
+        echo -e ""
         sleep 2
 
         curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/etc/rita.yaml' > /etc/rita/config.yaml
@@ -854,7 +855,10 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         fi
     fi
 
-    # Example usage
+    # Examples
+    echo -e ""
+    echo -e "${BOLD}TEST RITA WITH THE FOLLOWING:${RESET}"
+    echo -e ""
     echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
     echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
     echo -e ""
@@ -866,9 +870,9 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
     echo -e "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
     echo -e "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
     echo -e ""
-    echo -e "Import multiple diretories of YYYY-MM-DD/*.gz Zeek log files to database db_1:"
+    echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
     echo -e "${YELLOW}sudo su${RESET}"
-    echo -e "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS="$logs"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+    echo -e "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
     sleep 5
 }
 
@@ -1714,7 +1718,17 @@ function InstallRITA() {
         echo -e "${BLUE}[i]Also be sure to try '-H | less -S' to view data manually.${RESET}"
         echo -e "   If the output is messed up try all four arrow keys inside of less to arrange it properly."
         echo -e "   ${BOLD}EXAMPLE:${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita show-exploded-dns db_1 -H | less -S${RESET}"
+        echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita show-exploded-dns db_1 -H | less -S${RESET}"
+        echo -e ""
+        echo -e "Import a directory of *.gz Zeek log files to databse db_1:"
+        echo -e "${YELLOW}sudo su${RESET}"
+        echo -e "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
+        echo -e "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
+        echo -e ""
+        echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
+        echo -e "${YELLOW}sudo su${RESET}"
+        echo -e "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+        echo -e ""s
     else
         echo -e "${BLUE}[i]RITA already installed."
     fi
@@ -1811,7 +1825,7 @@ function ManageMenu() {
     echo -e ""
     echo -e "   1) Install Bettercap"
     echo -e "   2) Install Zeek"
-    echo -e "   3) Install RITA + MongoDB"
+    echo -e "   3) Install RITA + MongoDB (if installed, shows command examples)" 
     echo -e "   4) Start and enable the network visibility services"
     echo -e "   5) Stop and disable the network visibility services"
     echo -e "   6) Manage Cron Tasks"
