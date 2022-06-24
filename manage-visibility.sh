@@ -1563,12 +1563,12 @@ function EchoStatus() {
             # https://github.com/activecm/docker-zeek#readme
             echo -e "        ${BLUE}●${RESET} zeek cron enabled via docker image by default"
         else
-            echo -e "    ${BOLD}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
+            echo -e "    ${YELLOW}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
         fi
     elif (zeekctl status > /dev/null); then
         echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
     else
-        echo -e "    ${BOLD}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
+        echo -e "    ${YELLOW}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
     fi
     if [ -e /etc/cron.d/zeek ]; then
         echo -e "        ${BLUE}●${RESET} zeek $($ZEEK_PATH/bin/zeekctl cron ?)"
@@ -1712,11 +1712,11 @@ function InstallRITA() {
         echo -e "${BLUE}[i]RITA already installed."
         echo -e ""
         echo -e "${BLUE}[i]Test with:${RESET}"
-        echo -e "${BOLD}   cd /etc/rita${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita --version${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs database_name_1${RESET}"
+        echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
+        echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs database_name_1${RESET}"
         echo -e "${BLUE}[i]Also be sure to try '-H | less -S' to view data manually.${RESET}"
-        echo -e "   If the output is messed up try all four arrow keys inside of less to arrange it properly."
+        echo -e "   ${YELLOW}If the output is messed up, try all four arrow keys inside of 'less' to arrange it properly.${RESET}"
+	echo -e ""
         echo -e "   ${BOLD}EXAMPLE:${RESET}"
         echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita show-exploded-dns db_1 -H | less -S${RESET}"
         echo -e ""
@@ -1728,7 +1728,7 @@ function InstallRITA() {
         echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
         echo -e "${YELLOW}sudo su${RESET}"
         echo -e "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
-        echo -e ""s
+        echo -e ""
     else
         echo -e "${BLUE}[i]RITA already installed."
     fi
