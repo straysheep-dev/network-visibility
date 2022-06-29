@@ -826,11 +826,6 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         echo -e ""
         echo -e "${BOLD}   This variable must be an exact log path, such as ${YELLOW}/opt/zeek/logs/yyyy-mm-dd${BOLD} or ${YELLOW}/opt/zeek/logs/current${RESET}"
         echo -e "${BOLD}   and is then called from the CLI as ${YELLOW}/logs${RESET}"
-        sleep 2
-        echo -e ""
-        echo -e "${BOLD}EXAMPLE:${RESET}"
-        echo -e "${YELLOW}   cd /etc/rita${RESET}"
-        echo -e "${YELLOW}   sudo docker-compose -f ./docker-compose.yml --env-file ./rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
         echo -e "[${BLUE}i${RESET}]$ZEEK_PATH/logs/current works well for scheduled cron jobs."
         echo -e "${BOLD}See: https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md for more details${RESET}"
@@ -855,24 +850,31 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         fi
     fi
 
+    # This needs to run twice initially with Docker for some reason
+    if ! (docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
+        if ! (docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
+            echo -e "[${YELLOW}i${RESET}]Cannot obtain rita --verison information..."
+            echo -e ""
+            echo -e "${BOLD}TEST RITA WITH THE FOLLOWING:${RESET}"
+            echo -e ""
+            echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
+            echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
+        fi
+    fi
+
     # Examples
-    echo -e ""
-    echo -e "${BOLD}TEST RITA WITH THE FOLLOWING:${RESET}"
-    echo -e ""
-    echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
-    echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
     echo -e ""
     echo -e "${BOLD}EXAMPLE USAGE:${RESET}"
     echo -e ""
-    sleep 1
-    echo -e "Import a directory of *.gz Zeek log files to databse db_1:"
+    echo -e "Import a directory of *.gz or *.log Zeek log files to databse db_1:"
     echo -e "${YELLOW}sudo su${RESET}"
     echo -e "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
     echo -e "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
     echo -e ""
-    echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
+    echo -e "Import multiple diretories of *.gz or *.log Zeek log files to database db_1:"
+    echo -e "For example, if all of the log folders are named 'fedora-YYYYmmdd-HHMMSS', use 'for logs in /path/to/logs/fedora-*'"
     echo -e "${YELLOW}sudo su${RESET}"
-    echo -e "${YELLOW}for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+    echo -e "${YELLOW}for logs in /path/to/logs/folder*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
     sleep 5
 }
 
