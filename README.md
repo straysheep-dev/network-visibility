@@ -15,6 +15,28 @@ This is a write up of the excellent [No SPAN Port? No Tap? No Problem!](https://
 
 A [setup script](https://github.com/straysheep-dev/network-visibility/blob/main/manage-visibility.sh) has been added to help automate the steps below, in an attempt to learn how each component works (both individually and with the others). The goal is to be able to spin up, or spin down, and configure all the services you may need from a single menu on whatever Ubuntu-based device you have available.
 
+## Credits
+
+This project takes code, ideas, or guidance from the following sources:
+
+- [g0tmi1k, os-scripts](https://github.com/g0tmi1k/os-scripts/blob/master/kali2.sh)
+	* [MIT License](https://github.com/g0tmi1k/os-scripts/blob/master/kali2.sh)
+
+- [angristan, wireguard-install](https://github.com/angristan/wireguard-install/blob/master/wireguard-install.sh)
+	* [MIT License](https://github.com/angristan/wireguard-install/blob/master/LICENSE)
+
+The following documentation was heavily referenced to get everything working:
+
+- [RITA Docs](https://github.com/activecm/rita/tree/master/docs)
+- [Bettercap Docs](https://www.bettercap.org/)
+- [Zeek Docs](https://docs.zeek.org/en/v4.1.1/install.html)
+- [ActiveCM, docker-zeek](https://github.com/activecm/docker-zeek)
+- [Docker Engine Install Guide](https://docs.docker.com/engine/install/ubuntu/)
+- [Docker Compose Install Guide](https://github.com/docker/compose/blob/v2/README.md)
+- [MongoDB Install Guide](https://docs.mongodb.com/v4.2/installation/)
+- [golang Install Guide](https://go.dev/doc/install)
+- [0ptsecdemo](https://github.com/0ptsec/optsecdemo)
+
 ## Contents
 - [Install Ubuntu 18.04 or 20.04](#install-ubuntu-1804-or-2004-choose-desktop-or-server)
 - [Install RITA / MongoDB / ZEEK](#install-rita--mongodb--zeek)

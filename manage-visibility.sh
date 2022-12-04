@@ -1,18 +1,9 @@
 #!/bin/bash
 
-# need to add a passive method of network monitoring as a serivce, and a way to choose which to enable between bettercap, and passive (as well as any others added in the future)
-# needs a sendmail configuration
-# need to review how many logs Zeek stores, and for how long:
-# https://docs.zeek.org/en/master/frameworks/logging.html?highlight=rotate#log-rotation-and-post-processing
-# assume Zeek will write logs to zeek/logs/* until there is no disk space left
-
 # https://www.activecountermeasures.com/why-is-my-program-running-slowly/
 
 # Setup bettercap and the necesary services for intercepting traffic on a RITA server or desktop vm
-# Version=0.3 (tested on 18.04.6, 20.04.3, Desktop, Server, Raspberry Pi 4B-8GB)
-
-
-
+# Version=0.4 (tested on 18.04.x, 20.04.x, Desktop, Server, Raspberry Pi 4B-8GB)
 
 #=====
 # Vars
@@ -28,21 +19,21 @@ RESET="\033[00m"     # reset
 UID1000="$(grep '1000' /etc/passwd | cut -d ':' -f 1)"                           # Normal user
 PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)" # Public Network Interface Card
 
-ZEEK_VER="${zeek_ver:-4.1.1}"
+ZEEK_VER="${zeek_ver:-5.1.1}"
 ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'
 ZEEK_DOCKER_HASH='e4818fb390a74f645338e1571afd0dd92628377a74fef67de309633777fcc470'
 ZEEK_GEN_CFG_HASH='1b13b9cb0ee1bc7662ad9c2551181e012d07d83848727f9277c64086d9ec330e'   # This value should never change
 ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b6721'  # This value should never change
 
-RITA_VER="${rita_ver:-4.4.0}"                                                        # Replace variable when latest release is available
-RITA_HASH='2a707a9046ce7d0e83392f908fcebe6cacca57517437679303ab5b755a0294c1'         # Replace variable when latest release is available
-RITA_CONF_HASH='4eceda1863fe26d01a21188264c5ac7d6e13d8cc6f088dee4d7621322035835b'    # Replace variable when latest release is available
+RITA_VER="${rita_ver:-4.6.0}"                                                        # Replace variable when latest release is available
+RITA_HASH='41b7db88c1e93ab634f8d0e276b83a45d3a49e8794f69e6dad4a37786ec73516'         # Replace variable when latest release is available
+RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'    # Replace variable when latest release is available
 RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe' # Replace variable when latest release is available
 
-DOCKER_COMPOSE_VER="${docker_compose_ver:-2.1.1}"
+DOCKER_COMPOSE_VER="${docker_compose_ver:-2.14.0}"
 DOCKER_COMPOSE_HASH=''                                                       # Leave blank
 
-GO_VER="${go_ver:-1.17.3}"                                                   # Replace this variable when latest binary release is available
+GO_VER="${go_ver:-1.19.3}"                                                   # Replace this variable when latest binary release is available
 GO_BIN=''                                                                    # Leave blank
 GO_HASH=''                                                                   # Leave blank
 
@@ -58,16 +49,16 @@ if (dpkg --print-architecture | grep -qx 'amd64'); then
     ARCH='amd64'
     BETTERCAP_BIN="bettercap_linux_amd64_v$BETTERCAP_VER"
     BETTERCAP_HASH='74e85473d8cbeaa79b3c636032cbd0967387c4e9f95e253b4ae105eccd208a4f'
-    DOCKER_COMPOSE_HASH='dad12a5cbc4dae3809138c070c06abe4a92ce3470679a0f67da920052b6e51c7'
+    DOCKER_COMPOSE_HASH='fdf634ab2b01aca33372bef2bf866699ef2e1f2dab19972e37967b1fc2a11402'
     GO_BIN="go$GO_VER.linux-amd64.tar.gz"
-    GO_HASH='550f9845451c0c94be679faf116291e7807a8d78b43149f9506c1b15eb89008c'
+    GO_HASH='74b9640724fd4e6bb0ed2a1bc44ae813a03f1e72a4c76253e2d5c015494430ba'
 elif (dpkg --print-architecture | grep -qx 'arm64'); then
     ARCH='arm64'
     BETTERCAP_BIN="bettercap_linux_aarch64_v$BETTERCAP_VER"
     BETTERCAP_HASH='a278b191f7d36419d390dfca4af651daf1e9f1c7900ec1b3f627ab6c2f7b57e2'
-    DOCKER_COMPOSE_HASH='2fa7bc8f64891fde806924559bf8aeac50185b77e5b3032951f1f634a8912476'
+    DOCKER_COMPOSE_HASH='0265f45b30f4f0e1d53c1968c590181f64c546129d967460de382c6de38af191'
     GO_BIN="go$GO_VER.linux-arm64.tar.gz"
-    GO_HASH='06f505c8d27203f78706ad04e47050b49092f1b06dc9ac4fbee4f0e4d015c8d4'
+    GO_HASH='99de2fe112a52ab748fb175edea64b313a0c8d51d6157dba683a6be163fd5eab'
 else
     echo "${BOLD}[i]Currently supported architectures: x86_64 (amd64), aarch64 (arm64)${RESET}" && exit 1
 fi
@@ -165,13 +156,13 @@ function InstallDocker() {
 
     echo -e "${BLUE}[>]Installing Docker from download.docker.com...${RESET}"
 
-    if ! [ -e /usr/share/keyrings/docker-archive-keyring.gpg ]; then
+    if ! [ -e /etc/apt/keyrings/docker.gpg ]; then
 
         apt-get install -y ca-certificates curl gnupg lsb-release
 
         curl -fsSL 'https://download.docker.com/linux/ubuntu/gpg' > "$SETUPDIR"/docker-archive-keyring.gpg
 
-        apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR"/docker-archive-keyring.gpg 2>/dev/null| grep '9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88'
+        apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR"/docker-archive-keyring.gpg 2>/dev/null| grep -P "9DC8\s?5822\s?9FC7\s?DD38\s?854A\s?\s?E2D8\s?8D81\s?803C\s?0EBF\s?CD88"
 
         # User to manually compare keyid's
         echo -e ""
@@ -184,8 +175,10 @@ function InstallDocker() {
         exit 1
         fi
 
-        gpg --dearmor < "$SETUPDIR"/docker-archive-keyring.gpg | tee /usr/share/keyrings/docker-archive-keyring.gpg > /dev/null
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+        sudo mkdir -p /etc/apt/keyrings
+
+        gpg --dearmor < "$SETUPDIR"/docker-archive-keyring.gpg | tee /etc/apt/keyrings/docker.gpg > /dev/null
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     fi
 
     if ! (command -v docker > /dev/null); then
@@ -195,11 +188,12 @@ function InstallDocker() {
     fi
     
     if ! (systemctl is-active docker); then
+        sleep 5
         systemctl restart docker
     fi
 
     if (command -v docker > /dev/null); then
-        echo -e "${BLUE}[i]Getting docker verison information...${RESET}"
+        echo -e "${BLUE}[i]Getting docker version information...${RESET}"
         sleep 1
         docker version
         echo -e "${BLUE}[✓]docker installed.${RESET}"
@@ -1688,7 +1682,7 @@ function InstallRITA() {
         InstallEssentialPackages
 
         # Check OS arch
-        if [[ $MAJOR_UBUNTU_VERSION -eq 18 ]]; then
+        if [[ $MAJOR_UBUNTU_VERSION -eq 18 ]] || [[ $MAJOR_UBUNTU_VERSION -eq 20 ]]; then
             if [ "$ARCH" == 'amd64' ]; then
                 InstallRITAFromScript
             elif  [ "$ARCH" == 'arm64' ]; then
@@ -1699,7 +1693,7 @@ function InstallRITA() {
                 echo -e "${BOLD}[i]Architecture not yes tested, quitting.${RESET}"
                 exit 1
             fi
-        elif  [[ $MAJOR_UBUNTU_VERSION -ne 18 ]]; then
+        elif  [[ $MAJOR_UBUNTU_VERSION -ne 18 ]] || [[ $MAJOR_UBUNTU_VERSION -ne 20 ]]; then
                 InstallDocker
                 InstallDockerCompose
                 InstallRITAFromDocker
@@ -1722,11 +1716,17 @@ function InstallRITA() {
         echo -e ""
         echo -e "Import a directory of *.gz Zeek log files to databse db_1:"
         echo -e "${YELLOW}   sudo su${RESET}"
+	echo -e "# Script Install:"
+	echo -e "${YELLOW}   rita import /path/to/logs/YYYY-MM-DD db_1${RESET}"
+        echo -e "# Docker:"
         echo -e "${YELLOW}   export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
         echo -e "${YELLOW}   docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
         echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
         echo -e "${YELLOW}   sudo su${RESET}"
+	echo -e "# Script Install:"
+	echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do rita import --rolling \"\$logs\" db_1; done${RESET}"
+        echo -e "# Docker:"
         echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
         echo -e ""
     else
