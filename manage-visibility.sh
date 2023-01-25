@@ -1831,7 +1831,7 @@ function InstallRITA() {
         CleanUp
         EchoStatus
     elif (command -v docker > /dev/null && (docker image list| grep -iq rita)); then
-        echo -e "${BLUE}[i]RITA already installed."
+        echo -e "${BLUE}[i]RITA already installed.${RESET}"
         echo -e ""
         echo -e "${BLUE}[i]Test with:${RESET}"
         echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
@@ -1856,7 +1856,13 @@ function InstallRITA() {
         echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
         echo -e ""
     else
-        echo -e "${BLUE}[i]RITA already installed."
+        echo -e "${BLUE}[i]RITA already installed.${RESET}"
+        echo ""
+        echo "Try these commands to get started:"
+        echo -e "${YELLOW}    [>]rita show-databases${RESET}"
+        echo -e "${YELLOW}    [>]rita import /path/to/logs/YYYY-* test_db${RESET}"
+        echo -e "${YELLOW}    [>]rita import /opt/zeek/logs/current/ test_db2${RESET}"
+        echo -e "${YELLOW}    [>]rita show-exploded-dns test_db -H | less -S${RESET}"
     fi
     
 
