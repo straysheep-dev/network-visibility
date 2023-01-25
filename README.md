@@ -53,29 +53,25 @@ The following documentation was heavily referenced to get everything working:
 
 ## Install Ubuntu 18.04 or 20.04 (choose desktop or server)
 
-NOTE: with RITA's shell installer on Ubuntu 20.04 mongodb will silently fail to install despite everything else running.
-
-See: <https://github.com/activecm/rita/issues/587>
-
 ```bash
 # https://releases.ubuntu.com               ## main images
 # https://cdimage.ubuntu.com/releases/      ## raspi + alternate flavors
 # https://ubuntu.com/download/raspberry-pi
 # https://ubuntu.com/tutorials/how-to-install-ubuntu-on-your-raspberry-pi
 
-curl -LfO 'https://releases.ubuntu.com/18.04/SHA256SUMS'
-curl -LfO 'https://releases.ubuntu.com/18.04/SHA256SUMS.gpg'
+curl -LfO 'https://releases.ubuntu.com/20.04/SHA256SUMS'
+curl -LfO 'https://releases.ubuntu.com/20.04/SHA256SUMS.gpg'
 
 # Server:
-curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.6-live-server-amd64.iso'
+curl -LfO 'https://releases.ubuntu.com/20.04/ubuntu-20.04.5-live-server-amd64.iso'
 
 # Desktop:
-curl -LfO 'https://releases.ubuntu.com/18.04/ubuntu-18.04.6-desktop-amd64.iso'
+curl -LfO 'https://releases.ubuntu.com/20.04/ubuntu-20.04.5-desktop-amd64.iso'
 
 # Raspberry Pi:
-curl -LfO 'https://cdimage.ubuntu.com/releases/18.04/release/SHA256SUMS'
-curl -LfO 'https://cdimage.ubuntu.com/releases/18.04/release/SHA256SUMS.gpg'
-curl -LfO 'https://cdimage.ubuntu.com/releases/18.04/release/ubuntu-18.04.5-preinstalled-server-arm64+raspi4.img.xz'
+curl -LfO 'https://cdimage.ubuntu.com/releases/20.04/release/SHA256SUMS'
+curl -LfO 'https://cdimage.ubuntu.com/releases/20.04/release/SHA256SUMS.gpg'
+curl -LfO 'https://cdimage.ubuntu.com/releases/20.04/release/ubuntu-20.04.5-preinstalled-server-arm64+raspi.img.xz'
 
 gpg --keyid-format long --keyserver hkps://keyserver.ubuntu.com:443 --recv-keys '843938DF228D22F7B3742BC0D94AA3F0EFE21092'
 gpg --verify --keyid-format long SHA256SUMS.gpg SHA256SUMS
@@ -85,27 +81,29 @@ OK
 
 From here, continue setup using your hypervisor of choice. VMware and VirtualBox are solid starting points.
 
-Remember that upgrading ubuntu 18.04 => 20.04 during install may break monogdb as mentioned above.
-
 
 ## Install RITA / MongoDB / ZEEK
 
-### Ubuntu 18.04 x86_64
+### Ubuntu 18.04 or 20.04 x86_64
 
+*This is currently the fastest way to start working with these tools.*
+
+Check for the latest version: https://github.com/activecm/rita/releases/latest
 ```bash
-# Check for the latest version: https://github.com/activecm/rita/releases/latest
-curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.4.0/install.sh' > rita-install.sh
+curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v4.7.0/install.sh' > rita-install.sh
 chmod +x rita-install.sh
 sudo ./rita-install.sh
+```
 
-# If ZEEK fails to install at line 7xx, check that $(lsb_release -sr) is still '18.04'
-
-# If /etc/rita isn't present but ZEEK and or mongodb installed successfully:
+If `/etc/rita` isn't present but ZEEK and or mongodb installed successfully:
+```bash
 sudo ./install.sh -r --disable-zeek --disable-mongo
+```
 
-# You want that 'Thank you for installing RITA! Happy hunting!' line at the end
+You want that 'Thank you for installing RITA! Happy hunting!' line at the end
 
-# check that both services are running:
+Check that both services are running:
+```bash
 sudo /opt/zeek/bin/zeekctl status
 systemctl status mongod.service
 ```
@@ -114,11 +112,15 @@ NOTE: if installing RITA on [Security Onion](https://github.com/Security-Onion-S
 
 ### Ubuntu 18.04 arm64
 
-```bash
-# As of 2021-12-01 https://github.com/activecm/docker-zeek is the quickest method on 18.04 arm64 architecture
-# There is currently no precompiled binary on https://build.opensuse.org/project/show/security:zeek for 18.04
+*These instructions may be outdated since support for 20.04 x86_64 was added to RITA.*
 
-# Install docker
+As of 2021-12-01 https://github.com/activecm/docker-zeek is the quickest method on 18.04 arm64 architecture
+
+There is currently no precompiled binary on https://build.opensuse.org/project/show/security:zeek for 18.04
+
+Install docker:
+
+```bash
 # https://docs.docker.com/engine/install/ubuntu/
 sudo apt-get install -y ca-certificates curl gnupg lsb-release
 curl -fsSL 'https://download.docker.com/linux/ubuntu/gpg' > docker-archive-keyring.gpg
@@ -129,8 +131,10 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docke
 
 sudo apt-get update
 sudo apt-get install docker-ce docker-ce-cli containerd.io
+```
 
-# Install docker-zeek
+Install docker-zeek:
+```bash
 # https://github.com/activecm/docker-zeek
 curl -fsSL 'https://raw.githubusercontent.com/activecm/docker-zeek/master/zeek' > zeek
 sudo chown root:root ./zeek
@@ -171,19 +175,22 @@ sudo docker exec -it zeek zeek --version
 /usr/local/bin/zeek restart
 # Review versions you have in docker:
 sudo docker image list
+```
 
-# Install the zeek-open-connections plugin
+Install the zeek-open-connections plugin:
+```bash
 # https://github.com/activecm/zeek-open-connections/
 # https://docs.zeek.org/projects/package-manager/en/stable/quickstart.html
 sudo docker exec -it zeek zkg refresh
 sudo docker exec -it zeek zkg install zeek/activecm/zeek-open-connections
 /usr/local/bin/zeek restart
+```
 
-# From here either continue below, or jump to the instructions for 20.04 to use RITA via docker instead.
+From here either continue below, or jump to the instructions for 20.04 to use RITA via docker instead.
 
-# Install MongoDB (via apt-get from repo.mongodb.org)
+Install MongoDB (via apt-get from repo.mongodb.org):
+```bash
 # https://docs.mongodb.com/v4.2/installation/
-
 curl -fsSLO https://www.mongodb.org/static/pgp/server-4.2.asc
 gpg --with-fingerprint --keyid-format long ./server-4.2.asc | grep 'E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B'
 
@@ -200,42 +207,54 @@ sudo apt-get install -y mongodb-org
 systemctl start mongod
 # If mongod doesn't start:
 systemctl daemon-reload
+```
 
-# Ensure MongoDB is running
+Ensure MongoDB is running:
+```bash
 if ! (systemctl is-active mongod); then
     systemctl unmask mongod
     systemctl enable mongod
     systemctl restart mongod
 fi
+```
 
-# Install RITA from source
+Install RITA from source:
+```bash
 # https://go.dev/doc/install
-curl -fsSLO 'https://go.dev/dl/go1.17.4.linux-arm64.tar.gz'
-sha256sum go1.17.4.linux-arm64.tar.gz | grep 'adab2483f644e2f8a10ae93122f0018cef525ca48d0b8764dae87cb5f4fd4206'
-sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.17.4.linux-arm64.tar.gz
+curl -fsSLO 'https://go.dev/dl/go1.19.5.linux-arm64.tar.gz'
+sha256sum go1.19.5.linux-arm64.tar.gz | grep 'fc0aa29c933cec8d76f5435d859aaf42249aa08c74eb2d154689ae44c08d23b3'
+sudo rm -rf /usr/local/go && sudo tar -C /usr/local -xzf go1.19.5.linux-arm64.tar.gz
+```
 
-# Create the following PATH file at /etc/profile.d/go.sh
+Create the following PATH file at /etc/profile.d/go.sh:
+```
 if [ -d "/usr/local/go" ] ; then
     PATH="$PATH:/usr/local/go/bin"
 fi
+```
 
-# Source the updated PATH
+Source the updated PATH:
+```bash
 source /etc/profile.d/go.sh
+```
 
-# Add go to sudo's PATH by executing `sudo visudo` and adding
-# '/usr/local/go/bin:' to the `secure_path=` variable (without single quotes)
+Add go to sudo's PATH by executing `sudo visudo` and adding `/usr/local/go/bin:` to the `secure_path=` variable:
+```bash
 sudo visudo
+```
 
-# Confirm go is in $PATH
+Confirm go is in $PATH:
+```bash
 go version
 sudo go version
+```
 
-# Clone RITA from GitHub
+Clone RITA from GitHub:
+```bash
 git clone https://github.com/activecm/rita.git
 cd rita
 # `make` will produce a rita binary in the current working directory
 make
-
 # to install the binary to /usr/local/bin/rita:
 sudo make install
 # or to install to a different location:
@@ -247,12 +266,16 @@ sudo PREFIX=/ make install
 sudo mkdir /etc/rita && sudo chmod 755 /etc/rita
 sudo mkdir -p /var/lib/rita/logs && sudo chmod -R 755 /var/lib/rita
 sudo cp ./etc/rita.yaml /etc/rita/config.yaml && sudo chmod 644 /etc/rita/config.yaml
+```
 
-# modify the config file as needed and test using the `rita test-config` command
+Modify the config file as needed and test using the `rita test-config` command:
+```bash
 sudo rita test-config
 ```
 
-### Ubuntu 20.04 x86_64 and arm64
+### Ubuntu 20.04 arm64
+
+*These instructions may be outdated since support for 20.04 x86_64 was added to RITA.*
 
 ```bash
 # Install Zeek
@@ -625,6 +648,9 @@ Arp spoofing examples taken from: <https://www.bettercap.org/modules/ethernet/sp
 ```
 
 ## Putting It All Together:
+
+*It may take a few minutes before you can "see" intercepted traffic on your analysis machine.*
+
 ```bash
 # start bettercap with http web-ui
 sudo bettercap -caplet http-ui
@@ -636,7 +662,9 @@ sudo bettercap -caplet http-ui
 # you're done! leave these running continuously to capture traffic
 ```
 
-NOTE: If devices have built in arp spoofing protection, setup a DHCP server on the device running bettercap and RITA
+*If you have another locally networked device, check its arp cache. The MAC address for the gateway and the box running bettercap should be the same value after a few minutes.*
+
+If devices have built in arp spoofing protection, setup a DHCP server on the device running bettercap and RITA
 
 To end a web session logout of the web-ui. The interactive shell will still be running until you `exit`
 
@@ -680,5 +708,5 @@ rita show-exploded-dns -H dataset_1 | less -S
 
 ## What Next?
 
-* Configure bettercap commands to spin up as a service on start
+* Configure bettercap commands to [spin up as a service on start](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
 * Happy hunting!
