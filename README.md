@@ -40,9 +40,9 @@ The following documentation was heavily referenced to get everything working:
 ## Contents
 - [Install Ubuntu 18.04 or 20.04](#install-ubuntu-1804-or-2004-choose-desktop-or-server)
 - [Install RITA / MongoDB / ZEEK](#install-rita--mongodb--zeek)
-    * [Ubuntu 18.04 x86_64](#ubuntu-1804-x86_64)
+    * [Ubuntu 18.04 or 20.04 x86_64](#ubuntu-1804-or-2004-x86_64)
     * [Ubuntu 18.04 arm64](#ubuntu-1804-arm64)
-    * [Ubuntu 20.04 x86_64 + arm64](#ubuntu-2004-x86_64-and-arm64)
+    * [Ubuntu 20.04 arm64](#ubuntu-2004-arm64)
 - [Installing Bettercap from Pre-compiled Binaries (GitHub)](#installing-bettercap-from-pre-compiled-binaries-github)
 - [Resolving Errors](#resolving-errors)
 - [Using the Web-UI](#using-the-web-ui)
