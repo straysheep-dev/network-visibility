@@ -5,6 +5,11 @@
 # Setup bettercap and the necesary services for intercepting traffic on a RITA server or desktop vm
 # Version=0.4 (tested on 18.04.x, 20.04.x, Desktop, Server, Raspberry Pi 4B-8GB)
 
+# shellcheck disable=SC2181
+# shellcheck disable=SC2166
+# shellcheck disable=SC1091
+# shellcheck disable=SC2016
+
 #=====
 # Vars
 #=====
@@ -16,33 +21,32 @@ RED="\033[01;31m"    # errors
 BOLD="\033[01;01m"   # highlight
 RESET="\033[00m"     # reset
 
-UID1000="$(grep '1000' /etc/passwd | cut -d ':' -f 1)"                           # Normal user
 PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)" # Public Network Interface Card
 
-ZEEK_VER="${zeek_ver:-5.1.1}"
-ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'
-ZEEK_DOCKER_HASH='e4818fb390a74f645338e1571afd0dd92628377a74fef67de309633777fcc470'
+ZEEK_VER="${zeek_ver:-5.1.1}"                                                    # Replace this variable when latest release is available: https://github.com/zeek/zeek/releases/
+ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'                              # Replace this variable when a new key is available: https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
+ZEEK_DOCKER_HASH='e4818fb390a74f645338e1571afd0dd92628377a74fef67de309633777fcc470'    # Replace variable when latest release is available: https://github.com/activecm/docker-zeek/blob/master/zeek
 ZEEK_GEN_CFG_HASH='1b13b9cb0ee1bc7662ad9c2551181e012d07d83848727f9277c64086d9ec330e'   # This value should never change
 ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b6721'  # This value should never change
 
-RITA_VER="${rita_ver:-4.6.0}"                                                        # Replace variable when latest release is available
+RITA_VER="${rita_ver:-4.6.0}"                                                        # Replace variable when latest release is available: https://github.com/activecm/rita/releases
 RITA_HASH='41b7db88c1e93ab634f8d0e276b83a45d3a49e8794f69e6dad4a37786ec73516'         # Replace variable when latest release is available
-RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'    # Replace variable when latest release is available
-RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe' # Replace variable when latest release is available
+RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'    # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
+RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe' # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/docker-compose.yml
 
-DOCKER_COMPOSE_VER="${docker_compose_ver:-2.14.0}"
+DOCKER_COMPOSE_VER="${docker_compose_ver:-2.14.0}"                           # Replace this variable when latest binary release is available: https://github.com/docker/compose/releases
 DOCKER_COMPOSE_HASH=''                                                       # Leave blank
 
-GO_VER="${go_ver:-1.19.3}"                                                   # Replace this variable when latest binary release is available
+GO_VER="${go_ver:-1.19.3}"                                                   # Replace this variable when latest binary release is available: https://go.dev/doc/install
 GO_BIN=''                                                                    # Leave blank
 GO_HASH=''                                                                   # Leave blank
 
 BETTERCAP_BIN=''                                                             # Leave blank
-BETTERCAP_VER="${bettercap_ver:-2.31.1}"                                     # Replace this variable when latest binary release is available
+BETTERCAP_VER="${bettercap_ver:-2.31.1}"                                     # Replace this variable when latest binary release is available: https://github.com/bettercap/bettercap/releases/
 BETTERCAP_HASH=''                                                            # Leave blank
 
 HTTP_CONF='/usr/local/share/bettercap/caplets/http-ui.cap'                   # Default path to http(s) conf files that contain credentials
-HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'
+HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'                 # Default path to http(s) conf files that contain credentials
 
 # Arch Check
 if (dpkg --print-architecture | grep -qx 'amd64'); then
@@ -494,38 +498,40 @@ function AddZeekToPath() {
 
 function InstallNodeCfgScript() {
 
-    if ! [ -e "$ZEEK_PATH"/share/zeek-cfg ]; then
-        mkdir -p "$ZEEK_PATH"/share/zeek-cfg
-    fi
+	if ! [ -e "$ZEEK_PATH"/share/zeek-cfg ]; then
+		mkdir -p "$ZEEK_PATH"/share/zeek-cfg
+	fi
 
-    if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh ]; then
-        echo -e "${BLUE}[i]Downloading gen-node-cfg.sh...${RESET}"
-        curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh" -o "$SETUPDIR/gen-node-cfg.sh"
-        echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
-        # Check against known hashes
-        if ! (sha256sum "$SETUPDIR/gen-node-cfg.sh" | grep -x "$ZEEK_GEN_CFG_HASH  $SETUPDIR/gen-node-cfg.sh"); then
-            echo "${RED}Bad checksum, quitting...${RESET}"
-            exit 1
-        else
-            echo -e "${GREEN}OK${RESET}"
-            echo -e "${YELLOW}[i]Moving $SETUPDIR/gen-node-cfg.sh    ->  $ZEEK_PATH/share/zeek-cfg/gen-node-cfg.sh${RESET}"
-            chmod 755 "$SETUPDIR"/gen-node-cfg.sh
-            mv "$SETUPDIR"/gen-node-cfg.sh "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh
-        fi
-    fi
-    if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template ]; then
-        echo -e "${BLUE}[i]Downloading node.cfg-template...${RESET}"
-        curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" -o "$SETUPDIR/node.cfg-template"
-        if ! (sha256sum "$SETUPDIR/node.cfg-template" | grep -x "$ZEEK_NODE_CFG_HASH  $SETUPDIR/node.cfg-template"); then
-            echo "${RED}Bad checksum, quitting...${RESET}"
-            exit 1
-        else
-            echo -e "${GREEN}OK${RESET}"
-            echo -e "${YELLOW}[i]Moving $SETUPDIR/node.cfg-template  ->  $ZEEK_PATH/share/zeek-cfg/node.cfg-template${RESET}"
-            chmod 644 "$SETUPDIR"/node.cfg-template
-            mv "$SETUPDIR"/node.cfg-template "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template
-        fi
-    fi
+	if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh ]; then
+		echo -e "${BLUE}[i]Downloading gen-node-cfg.sh...${RESET}"
+		curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh" -o "$SETUPDIR/gen-node-cfg.sh"
+
+		echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+		if ! (sha256sum "$SETUPDIR/gen-node-cfg.sh" | grep -x "$ZEEK_GEN_CFG_HASH  $SETUPDIR/gen-node-cfg.sh"); then
+			echo "${RED}Bad checksum, quitting...${RESET}"
+			exit 1
+		else
+			echo -e "${GREEN}OK${RESET}"
+			echo -e "${YELLOW}[i]Moving $SETUPDIR/gen-node-cfg.sh    ->  $ZEEK_PATH/share/zeek-cfg/gen-node-cfg.sh${RESET}"
+			chmod 755 "$SETUPDIR"/gen-node-cfg.sh
+			mv "$SETUPDIR"/gen-node-cfg.sh "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh
+		fi
+	fi
+	if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template ]; then
+		echo -e "${BLUE}[i]Downloading node.cfg-template...${RESET}"
+		curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" -o "$SETUPDIR/node.cfg-template"
+
+		echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+		if ! (sha256sum "$SETUPDIR/node.cfg-template" | grep -x "$ZEEK_NODE_CFG_HASH  $SETUPDIR/node.cfg-template"); then
+			echo "${RED}Bad checksum, quitting...${RESET}"
+			exit 1
+		else
+			echo -e "${GREEN}OK${RESET}"
+			echo -e "${YELLOW}[i]Moving $SETUPDIR/node.cfg-template  ->  $ZEEK_PATH/share/zeek-cfg/node.cfg-template${RESET}"
+			chmod 644 "$SETUPDIR"/node.cfg-template
+			mv "$SETUPDIR"/node.cfg-template "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template
+		fi
+	fi
 
 }
 
@@ -535,8 +541,6 @@ function ConfigureNode() {
     # Taken directly from: https://github.com/activecm/rita/blob/4a4b6394a6fb2619ba91e0112e94a54f0653808a/install.sh#L317
 #    if ! (grep -q '^type=worker' "$ZEEK_PATH/etc/node.cfg") ; then
  
-    # Run the configuration script
-    echo -e "${BLUE}[i]Running the node.cfg configuration script RITA's installer uses to complete Zeek setup...${RESET}"
     "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh
 }
 
@@ -608,28 +612,31 @@ function StartZeek() {
 
 function ConfigureZeek() {
 
-    # https://docs.zeek.org/en/v4.1.1/quickstart.html
+	# https://docs.zeek.org/en/v4.1.1/quickstart.html
 
-    AddZeekToPath
+	AddZeekToPath
 
-    InstallNodeCfgScript
+	InstallNodeCfgScript
 
-    until [[ $CONFIGURE_NODE_CHOICE =~ ^(y|n)$ ]]; do
-        read -rp "Run Zeek node configuration script? [y/n]: " -e CONFIGURE_NODE_CHOICE
-    done
-    if [[ "$CONFIGURE_NODE_CHOICE" == "y" ]]; then
-        ConfigureNode
-    fi
+	until [[ $CONFIGURE_NODE_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "Run Zeek node configuration script? (It's the same one RITA uses) [y/n]: " -e CONFIGURE_NODE_CHOICE
+	done
+	if [[ "$CONFIGURE_NODE_CHOICE" == "y" ]]; then
+		ConfigureNode
+	fi
 
-    InstallZkgPackages
+	InstallZkgPackages
 
-    until [[ $START_ZEEK_CHOICE =~ ^(y|n)$ ]]; do
-        read -rp "Start Zeek now? [y/n]: " -e START_ZEEK_CHOICE
-    done
-    if [[ "$START_ZEEK_CHOICE" == "y" ]]; then
-        StartZeek
-    fi
-
+	if ! (zeekctl status > /dev/null); then
+		until [[ $START_ZEEK_CHOICE =~ ^(y|n)$ ]]; do
+			read -rp "Start Zeek now? [y/n]: " -e START_ZEEK_CHOICE
+		done
+		if [[ "$START_ZEEK_CHOICE" == "y" ]]; then
+			StartZeek
+		fi
+	else
+		echo -e "${BLUE}[i]Zeek already running.${RESET}"
+	fi
 }
 
 function InstallRITAFromScript() {
@@ -912,7 +919,7 @@ function InstallBettercapFromRelease() {
     if (command -v bettercap > /dev/null); then
         echo -e "${BLUE}[✓]Bettercap installed.${RESET}"
     else
-        echo "${BLUE}Bettercap not found in PATH. Quitting.${RESET}"
+        echo "${BLUE}Bettercap not found in PATH. Quitting...${RESET}"
         exit 1
     fi
 
@@ -939,32 +946,40 @@ function InstallBettercapFromRelease() {
 }
 
 function UpdateCredentials() {
-    # Replace default http credentials if found
-    if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTP_CONF"); then
-            echo -e "${BLUE}[i]Replacing default http web interface credentials (user::pass)...${RESET}"
-            sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
-            sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
-            # Restart bettercap for http-ui to accept new credentials
-            if (systemctl is-active --quiet bettercap-arp-antidote.service); then
-                systemctl restart bettercap-arp-antidote
-            fi
-    else
-        echo ""
-        echo -e "${BOLD}[i]http-ui credentials already randomized, current entries below.${RESET}"
-    fi
-    # Replace default https credentials if found
-    if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTPS_CONF"); then
-            echo -e "${BLUE}[i]Replacing default https web interface credentials (user::pass)...${RESET}"
-            sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
-            sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
-            # Restart bettercap for https-ui to accept new credentials
-            if (systemctl is-active --quiet bettercap-arp-antidote.service); then
-                systemctl restart bettercap-arp-antidote
-            fi
-    else
-        echo ""
-        echo -e "${BOLD}[i]https-ui credentials already randomized, current entries below.${RESET}"
-    fi
+	# Replace default http credentials if found
+	if ! [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
+		echo -e "${YELLOW}[i]http-ui.cap not found. Quitting...${RESET}"
+		exit 1
+	fi
+	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTP_CONF"); then
+		echo -e "${BLUE}[i]Replacing default http web interface credentials (user::pass)...${RESET}"
+		sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+		sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+		# Restart bettercap for http-ui to accept new credentials
+		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
+			systemctl restart bettercap-arp-antidote
+		fi
+	else
+		echo ""
+		echo -e "${BOLD}[i]http-ui credentials already randomized, current entries below.${RESET}"
+	fi
+	# Replace default https credentials if found
+	if ! [ -e /usr/local/share/bettercap/caplets/https-ui.cap ]; then
+		echo -e "${YELLOW}[i]https-ui.cap not found. Quitting...${RESET}"
+		exit 1
+	fi
+	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTPS_CONF"); then
+		echo -e "${BLUE}[i]Replacing default https web interface credentials (user::pass)...${RESET}"
+		sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+		sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+		# Restart bettercap for https-ui to accept new credentials
+		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
+			systemctl restart bettercap-arp-antidote
+		fi
+	else
+		echo ""
+		echo -e "${BOLD}[i]https-ui credentials already randomized, current entries below.${RESET}"
+	fi
 }
 
 
@@ -1021,6 +1036,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/packet-forwarding.service
 
         systemctl enable packet-forwarding
 
+	echo ""
         echo -e "${BOLD}[?]Start the packet forwarding service now?${RESET}"
         until [[ $START_CHOICE_PACKET_FORWARDING =~ ^(y|n)$ ]]; do
             read -rp "[y/n]? " START_CHOICE_PACKET_FORWARDING
@@ -1036,7 +1052,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/packet-forwarding.service
             echo -e "${BLUE}[✓]Done.${RESET}"
         else
             echo -e "${BLUE}[i]OK, packet forwarding won't start until next reboot or by running:${RESET}"
-            echo -e "${BOLD}[i]sudo systemctl restart packet-forwarding${RESET}"
+            echo -e "${YELLOW}    [>]sudo systemctl restart packet-forwarding${RESET}"
         fi
     fi
 
@@ -1101,6 +1117,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/bettercap-arp-antidote.service
         systemctl daemon-reload
         systemctl enable bettercap-arp-antidote
 
+	echo ""
         echo -e "${BOLD}[?]Start bettercap arp-cache antidoting the network now?${RESET}"
         until [[ $START_CHOICE_BETTERCAP_ARP =~ ^(y|n)$ ]]; do
             read -rp "[y/n]? " START_CHOICE_BETTERCAP_ARP
@@ -1116,7 +1133,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/bettercap-arp-antidote.service
             echo -e "${BLUE}[✓]Done.${RESET}"
         else
             echo -e "${BLUE}[i]OK, bettercap's arp-cache services won't start until next reboot or by running:${RESET}"
-            echo -e "${BOLD}[i]sudo systemctl restart bettercap-arp-antidote${RESET}"
+            echo -e "${YELLOW}    [>]sudo systemctl restart bettercap-arp-antidote${RESET}"
         fi
     else
         echo -e "${YELLOW}[i]Bettercap not installed, skipping installation of bettercap-arp-antidote.service${RESET}"
@@ -1140,77 +1157,94 @@ function InstallServices() {
 
 function StartServices() {
 
-    # packet-forwarding.service is the base service required no matter how you decide to intercept traffic
-    # That's why a check is performed to see if it's missing, and InstallServices will be called if it is.
-    # The remaining checks look for what known services are installed rather than what is not installed. If you chose them to be installed they will have a service file.
-    # Similarly if the packet-forwarding service is missing, that means you uninstalled all possible network visibility services.
-    # This is the current best solution to starting and stopping only the services chosen, and also allowing more services to be added to these same functions in the future.
-    if ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
-        echo -e "${BLUE}[i]Starting and enabling network visibility services...${RESET}"
-        sleep 2
-        InstallServices
-        exit 0
-    fi
+	# Check for bettercap
+	if ! [ -e /usr/local/bin/bettercap ]; then
+		echo -e "${YELLOW}bettercap not installed. Quitting...${RESET}"
+		exit 1
+	fi
+	
+	# It can take a few minutes before you start intercepting all traffic
+	# A good way to check this is by reviewing the arp cache on another locally networked machine
+	# The MAC address for the this box (running bettercap) and the gateway will show as the same value
+	echo -e "${YELLOW}[>]Starting network visibility services. This can take a few minutes before you can tail your current/*.log Zeek logs...${RESET}"
 
-    # Checks for packet-forwarding.service
-    if [ -e /etc/systemd/system/packet-forwarding.service ]; then
-        if (systemctl is-active --quiet packet-forwarding.service); then
-            echo "${BLUE}[i]packet-forwarding.service already running.${RESET}"
-        elif (systemctl is-enabled --quiet packet-forwarding.service); then
-            echo "${BLUE}[i]restarting packet-forwarding.service...${RESET}"
-            systemctl restart packet-forwarding
-        else
-            systemctl enable packet-forwarding
-            systemctl restart packet-forwarding
-        fi
-    fi
+	# packet-forwarding.service is the base service required no matter how you decide to intercept traffic
+	# That's why a check is performed to see if it's missing, and InstallServices will be called if it is.
+	# The remaining checks look for what known services are installed rather than what is not installed. If you chose them to be installed they will have a service file.
+	# Similarly if the packet-forwarding service is missing, that means you uninstalled all possible network visibility services.
+	# This is the current best solution to starting and stopping only the services chosen, and also allowing more services to be added to these same functions in the future.
+	if ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
+		echo -e "${BLUE}[i]Starting and enabling network visibility services...${RESET}"
+		sleep 2
+		InstallServices
+		exit 0
+	fi
 
-    # Checks for bettercap-arp-antidote.service
-    if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
-        if (systemctl is-active --quiet bettercap-arp-antidote.service); then
-            echo "${BLUE}[i]bettercap-arp-antidote.service already running.${RESET}"
-        elif (systemctl is-enabled --quiet bettercap-arp-antidote.service); then
-            echo "${BLUE}[i]restarting bettercap-arp-antidote.service...${RESET}"
-            systemctl restart bettercap-arp-antidote
-        else
-            systemctl enable bettercap-arp-antidote
-            systemctl restart bettercap-arp-antidote
-        fi
-    fi
+	# Checks for packet-forwarding.service
+	if [ -e /etc/systemd/system/packet-forwarding.service ]; then
+		if (systemctl is-active --quiet packet-forwarding.service); then
+			echo -e "${BLUE}[i]packet-forwarding.service already running.${RESET}"
+		elif (systemctl is-enabled --quiet packet-forwarding.service); then
+			echo -e "${BLUE}[i]restarting packet-forwarding.service...${RESET}"
+			systemctl restart packet-forwarding
+		else
+			systemctl enable packet-forwarding
+			systemctl restart packet-forwarding
+		fi
+	fi
 
-    echo -e "${BLUE}[✓]Done.${RESET}"
+	# Checks for bettercap-arp-antidote.service
+	if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
+		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
+			echo -e "${BLUE}[i]bettercap-arp-antidote.service already running.${RESET}"
+		elif (systemctl is-enabled --quiet bettercap-arp-antidote.service); then
+			echo -e "${BLUE}[i]restarting bettercap-arp-antidote.service...${RESET}"
+			systemctl restart bettercap-arp-antidote
+		else
+			systemctl enable bettercap-arp-antidote
+			systemctl restart bettercap-arp-antidote
+		fi
+	fi
+
+	echo -e "${BLUE}[✓]Done.${RESET}"
 
 }
 
 function StopServices() {
 
-    echo -e "${BLUE}[i]Stopping network visibility services...${RESET}"
+	# Check for bettercap
+	if ! [ -e /usr/local/bin/bettercap ]; then
+		echo -e "${YELLOW}bettercap not installed. Quitting...${RESET}"
+		exit 1
+	fi
 
-    # Checks for bettercap-arp-antidote.service
-    if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
-        if ! (systemctl is-active --quiet bettercap-arp-antidote.service); then
-            echo "[i]bettercap-arp-antidote.service already stopped."
-            systemctl disable bettercap-arp-antidote
-        else
-            systemctl stop bettercap-arp-antidote
-            systemctl disable bettercap-arp-antidote
-        fi
-    fi
-    
-    # Checks for packet-forwarding.service
-    if [ -e /etc/systemd/system/packet-forwarding.service ]; then
-        if ! (systemctl is-active --quiet packet-forwarding.service); then
-            echo "[i]packet-forwarding.service already stopped."
-            systemctl disable packet-forwarding
-        else
-            systemctl stop packet-forwarding
-            systemctl disable packet-forwarding
-        fi
-    fi
+	echo -e "${BLUE}[i]Stopping network visibility services...${RESET}"
 
-    # Add or change your own additional service checks here
+	# Checks for bettercap-arp-antidote.service
+	if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
+		if ! (systemctl is-active --quiet bettercap-arp-antidote.service); then
+			echo "[i]bettercap-arp-antidote.service already stopped."
+			systemctl disable bettercap-arp-antidote
+		else
+			systemctl stop bettercap-arp-antidote
+			systemctl disable bettercap-arp-antidote
+		fi
+	fi
 
-    echo -e "${BLUE}[✓]Done.${RESET}"
+	# Checks for packet-forwarding.service
+	if [ -e /etc/systemd/system/packet-forwarding.service ]; then
+		if ! (systemctl is-active --quiet packet-forwarding.service); then
+			echo "[i]packet-forwarding.service already stopped."
+			systemctl disable packet-forwarding
+		else
+			systemctl stop packet-forwarding
+			systemctl disable packet-forwarding
+		fi
+	fi
+
+	# Add or change your own additional service checks here
+
+	echo -e "${BLUE}[✓]Done.${RESET}"
 
 }
 
@@ -1221,26 +1255,31 @@ function StopServices() {
 #===========
 
 
-function EnableRollingImports() {
+function EnableRITACron() {
 
-    # https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md
+	if ! [ -e /etc/rita ]; then
+		echo -e "${YELLOW}RITA not installed. Quitting...${RESET}"
+		exit 1
+	fi
 
-    echo ""
-    echo -e "${BLUE}[?]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the given database)${RESET}"
-    until [[ $RITA_CRON_CHOICE =~ ^(y|n)$ ]]; do
-        read -rp "[y/n]? " RITA_CRON_CHOICE
-    done
+	# https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md
 
-    if [[ $RITA_CRON_CHOICE == "y" ]]; then
-        echo -e ""
-        echo -e "Enter a name for the database."
-        echo -e ""
-        until [[ ${DB_NAME} =~ ^[a-zA-Z0-9_]+$ ]]; do
-            read -rp "Database name: " -e -i db_name DB_NAME
-        done
+	echo ""
+	echo -e "${BLUE}[i]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the given database)${RESET}"
+	until [[ $RITA_CRON_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "[y/n]? " RITA_CRON_CHOICE
+	done
 
-        if ! [ -e /etc/cron.d/rita ]; then
-            echo "# /etc/cron.d/rita: crontab entries for rita to do rolling imports of zeek logs
+	if [[ $RITA_CRON_CHOICE == "y" ]]; then
+		echo -e ""
+		echo -e "Enter a name for the database."
+		echo -e ""
+		until [[ ${DB_NAME} =~ ^[a-zA-Z0-9_]+$ ]]; do
+			read -rp "Database name: " -e -i db_name DB_NAME
+		done
+
+	if ! [ -e /etc/cron.d/rita ]; then
+		echo "# /etc/cron.d/rita: crontab entries for rita to do rolling imports of zeek logs
 
 SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin" > /etc/cron.d/rita
@@ -1262,53 +1301,102 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin" > /etc/cron.d
 
 }
 
+function ManageRITACron() {
+
+	if [ -e /etc/cron.d/rita ]; then
+		echo ""
+		echo -e "${BLUE}[i]Delete /etc/cron.d/rita?${RESET}"
+		echo ""
+		until [[ $RITA_CRON_OPTION =~ ^(y|n)$ ]]; do
+			read -rp "Select an option [y/n]: " RITA_CRON_OPTION
+		done
+
+		if [[ "$RITA_CRON_OPTION" == 'y' ]]; then
+			rm /etc/cron.d/rita
+			echo -e "${BLUE}[✓]Done.${RESET}"
+		else
+			exit 0
+		fi
+	else
+		EnableRITACron
+	fi
+
+}
+
 function EnableZeekCron() {
 
-    if [ -e /usr/local/bin/zeek ]; then
-        echo -e "${BLUE}[i]${RESET}docker-zeek's cron task is enabled by default. Exiting..."
-        exit 1
-    fi
+	if ! [ -e "$ZEEK_PATH"/bin/zeekctl ]; then
+		echo -e "${YELLOW}Zeek not installed. Quitting...${RESET}"
+		exit 1
+	fi
 
-    # https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command
+	if [ -e /usr/local/bin/zeek ]; then
+		echo -e "${BLUE}[i]${RESET}docker-zeek's cron task is enabled by default. Quitting..."
+		exit 1
+	fi
 
-    echo ""
-    echo -e "${BLUE}[?]Enable Zeek cron (only for non-docker Zeek installations)?${RESET}"
-    echo -e "${BLUE}This will check the Zeek process every 5 minutes, and restart it if it's crashed.${RESET}"
-    echo -e "${BLUE}[i]https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command${RESET}"
-    until [[ $ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
-        read -rp "[y/n]? " ZEEK_CRON_CHOICE
-    done
+	# https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command
 
-    if [[ $ZEEK_CRON_CHOICE == "y" ]]; then
+	echo ""
+	echo -e "${BLUE}[i]Enable Zeek cron? (only for non-docker Zeek installations)${RESET}"
+	echo -e "${BLUE}   This will check the Zeek process every 5 minutes, and restart it if it's crashed.${RESET}"
+	echo -e "${BLUE}   https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command${RESET}"
+	until [[ $ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "[y/n]? " ZEEK_CRON_CHOICE
+	done
 
-        "$ZEEK_PATH"/bin/zeekctl cron enable > /dev/null
+	if [[ $ZEEK_CRON_CHOICE == "y" ]]; then
 
-        echo "# /etc/cron.d/zeek: crontab entries for non-docker zeek binaries to automatically restart if crashed
+		"$ZEEK_PATH"/bin/zeekctl cron enable > /dev/null
+
+		echo "# /etc/cron.d/zeek: crontab entries for non-docker zeek binaries to automatically restart if crashed
 
 SHELL=/bin/bash
 PATH=$ZEEK_PATH/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 */5 *   * * *   root  $ZEEK_PATH/bin/zeekctl cron" > /etc/cron.d/zeek
     
-        echo ""
-        cat /etc/cron.d/zeek
+		echo ""
+		cat /etc/cron.d/zeek
 
-        echo ""
-        echo -e "${BLUE}[✓]New task scheduled under /etc/cron.d/zeek.${RESET}"
-    elif [[ $ZEEK_CRON_CHOICE == "n" ]]; then
+		echo ""
+		echo -e "${BLUE}[✓]New task scheduled under /etc/cron.d/zeek${RESET}"
+	elif [[ $ZEEK_CRON_CHOICE == "n" ]]; then
 
-        echo -e "${BLUE}[?]Remove Zeek cron?${RESET}"
-        until [[ $REMOVE_ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
-            read -rp "[y/n]? " REMOVE_ZEEK_CRON_CHOICE
-        done
+		echo -e "${BLUE}[i]Remove Zeek cron?${RESET}"
+		until [[ $REMOVE_ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
+			read -rp "[y/n]? " REMOVE_ZEEK_CRON_CHOICE
+		done
 
-        if [[ $REMOVE_ZEEK_CRON_CHOICE == "y" ]]; then
-            "$ZEEK_PATH"/bin/zeekctl cron disable > /dev/null
-            rm /etc/cron.d/zeek
-            echo -e "${BLUE}[i]/etc/cron.d/zeek removed.${RESET}"
-        fi
-    fi
+		if [[ $REMOVE_ZEEK_CRON_CHOICE == "y" ]]; then
+			"$ZEEK_PATH"/bin/zeekctl cron disable > /dev/null
+			rm /etc/cron.d/zeek
+			echo -e "${BLUE}[i]/etc/cron.d/zeek removed.${RESET}"
+		fi
+	fi
 
+
+}
+
+function ManageZeekCron() {
+
+	if [ -e /etc/cron.d/zeek ]; then
+		echo ""
+		echo -e "${BLUE}[i]Delete /etc/cron.d/zeek?${RESET}"
+		echo ""
+		until [[ $ZEEK_CRON_OPTION =~ ^(y|n)$ ]]; do
+			read -rp "Select an option [y/n]: " ZEEK_CRON_OPTION
+		done
+
+		if [[ "$ZEEK_CRON_OPTION" == 'y' ]]; then
+			rm /etc/cron.d/zeek
+			echo -e "${BLUE}[✓]Done.${RESET}"
+		else
+			exit 0
+		fi
+	else
+		EnableZeekCron
+	fi
 
 }
 
@@ -1317,35 +1405,42 @@ function ManageCronTasks() {
     # To do:
     # This section will need improved functionality
 
-    echo -e "${BLUE}[i]Currently scheduled cron tasks:${RESET}"
-    if ! (cat /etc/cron.d/rita); then
-        echo -e "${YELLOW}[i]No cron entry for RITA.${RESET}"
-    fi
-    if ! (cat /etc/cron.d/zeek); then
-        echo -e "${YELLOW}[i]No cron entry for Zeek.${RESET}"
-    fi
+	echo ""
+	echo -e "${BLUE}[i]Currently scheduled cron tasks:${RESET}"
+	echo ""
+	echo -e "=========================[ ${BLUE}RITA${RESET} ]============================="
+	if ! (cat /etc/cron.d/rita 2>/dev/null); then
+		echo -e "${YELLOW}[i]No cron entry for RITA.${RESET}"
+	fi
+	echo "=============================================================="
+	echo ""
+	echo -e "=========================[ ${BLUE}Zeek${RESET} ]============================="
+	if ! (cat /etc/cron.d/zeek 2>/dev/null); then
+		echo -e "${YELLOW}[i]No cron entry for Zeek.${RESET}"
+	fi
+	echo "=============================================================="
 
-    echo -e ""
-    echo -e "What would you like to do?"
-    echo -e ""
-    echo -e "   1) Manage RITA cron tasks"
-    echo -e "   2) Manage Zeek cron tasks"
-    echo -e "   3) Exit"
-    until [[ $CRON_MENU_OPTION =~ ^[1-3]$ ]]; do
-        read -rp "Select an option [1-3]: " CRON_MENU_OPTION
-    done
+	echo -e ""
+	echo -e "What would you like to do?"
+	echo -e ""
+	echo -e "   1) Manage RITA cron tasks"
+	echo -e "   2) Manage Zeek cron tasks"
+	echo -e "   3) Exit"
+	until [[ $CRON_MENU_OPTION =~ ^[1-3]$ ]]; do
+		read -rp "Select an option [1-3]: " CRON_MENU_OPTION
+	done
 
-    case $CRON_MENU_OPTION in
-    1)
-        EnableRollingImports
-        ;;
-    2)
-        EnableZeekCron
-        ;;
-    3)
-        exit 0
-        ;;
-    esac
+	case $CRON_MENU_OPTION in
+	1)
+		ManageRITACron
+		;;
+	2)
+		ManageZeekCron
+		;;
+	3)
+		exit 0
+		;;
+	esac
 
 }
 
@@ -1468,7 +1563,7 @@ function UninstallRITA() {
             docker rmi mongo:4.2
         fi
     fi
-    if [ -e /etc/rita -o -e /var/lib/rita -o -e /usr/local/bin/rita -o -e /usr/local/etc/rita -o -e /etc/cron.d/rita]; then
+    if [ -e /etc/rita -o -e /var/lib/rita -o -e /usr/local/bin/rita -o -e /usr/local/etc/rita -o -e /etc/cron.d/rita ]; then
         rm -rf /etc/rita 2>/dev/null
         rm -rf /var/lib/rita 2>/dev/null
         rm -rf /usr/local/bin/rita 2>/dev/null
@@ -1480,13 +1575,13 @@ function UninstallRITA() {
 }
 
 function CleanUp() {
-    # CleanUp
-    if [ -e "$SETUPDIR" ]; then
-        rm -rf "$SETUPDIR"
-    fi
+	# CleanUp
+	if [ -e "$SETUPDIR" ]; then
+		rm -rf "$SETUPDIR"
+	fi
 
-    # To do:
-    # Save / move this script to PATH for management
+	# To do:
+	# Save / move this script to PATH for management
 }
 
 
@@ -1496,106 +1591,116 @@ function CleanUp() {
 #===========================================================
 
 
-function EchoStatus() {
-    # Final echo to terminal
-    echo ""
-    echo -e "${BLUE}[i]${RESET}Status:"
+function PacketForwardingStatus() {
+	# packet-forwarding.service
+	if ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
+		echo -e "    ${BOLD}●${RESET} packet-forwarding.service not installed"
+	elif (systemctl is-active --quiet packet-forwarding.service); then
+		echo -e "    ${BLUE}●${RESET} packet-forwarding.service ${GREEN}is active${RESET}"
+	else
+		echo -e "    ${BOLD}●${RESET} packet-forwarding.service ${YELLOW}inactive${RESET}"        
+	fi
+}
 
-    # packet-forwarding.service
-    if ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
-        echo -e "    ${BOLD}●${RESET} packet-forwarding.service not installed"
-    elif (systemctl is-active --quiet packet-forwarding.service); then
-        echo -e "    ${BLUE}●${RESET} packet-forwarding.service ${GREEN}is active${RESET}"
-    else
-        echo -e "    ${BOLD}●${RESET} packet-forwarding.service ${YELLOW}inactive${RESET}"        
-    fi
+function ArpAntidoteStatus() {
+	# bettercap-arp-forwarding.service
+	if ! [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
+		echo -e "    ${BOLD}●${RESET} bettercap-arp-antidote.service not installed"
+	elif (systemctl is-active --quiet bettercap-arp-antidote.service); then
+		echo -e "    ${BLUE}●${RESET} bettercap-arp-antidote.service ${GREEN}is active${RESET}"
+	else
+		echo -e "    ${BOLD}●${RESET} bettercap-arp-antidote.service ${YELLOW}inactive${RESET}"        
+	fi
+}
 
-    # bettercap-arp-forwarding.service
-    if ! [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
-        echo -e "    ${BOLD}●${RESET} bettercap-arp-antidote.service not installed"
-    elif (systemctl is-active --quiet bettercap-arp-antidote.service); then
-        echo -e "    ${BLUE}●${RESET} bettercap-arp-antidote.service ${GREEN}is active${RESET}"
-    else
-        echo -e "    ${BOLD}●${RESET} bettercap-arp-antidote.service ${YELLOW}inactive${RESET}"        
-    fi
+function BettercapStatus() {
+	# Bettercap
+	if [ -e /usr/local/bin/bettercap ]; then
+		echo -e "    ${BLUE}●${RESET} bettercap installed"
+	else
+		echo -e "    ${BOLD}●${RESET} bettercap not installed"
+	fi
+}
 
-    # Bettercap
-    if [ -e /usr/local/bin/bettercap ]; then
-        echo -e "    ${BLUE}●${RESET} bettercap installed"
-    else
-        echo -e "    ${BOLD}●${RESET} bettercap not installed"
-    fi
+function DockerStatus() {
+	# Docker
+	if ! (command -v docker > /dev/null); then
+		echo -e "    ${BOLD}●${RESET} docker not installed"
+	elif (systemctl is-active --quiet docker.service); then
+		echo -e "    ${BLUE}●${RESET} docker ${GREEN}is active${RESET}"
+	else
+		echo -e "    ${BOLD}●${RESET} docker ${YELLOW}inactive${RESET}"
+	fi
+}
 
-    # Docker
-    if ! (command -v docker > /dev/null); then
-        echo -e "    ${BOLD}●${RESET} docker not installed"
-    elif (systemctl is-active --quiet docker.service); then
-        echo -e "    ${BLUE}●${RESET} docker ${GREEN}is active${RESET}"
-    else
-        echo -e "    ${BOLD}●${RESET} docker ${YELLOW}inactive${RESET}"
-    fi
+function ZeekStatus() {
+	# Zeek
+	# Zeek Profile
+	if [ -e /etc/profile.d/zeek-path.sh ]; then
+		source /etc/profile.d/zeek-path.sh
+	fi
+	if [ -e /etc/profile.d/zeek.sh ]; then
+		source /etc/profile.d/zeek.sh
+	fi
+	# Zeek PATH
+	ZEEK_PATH=''
+	if [ -e /usr/local/zeek/etc/node.cfg ]; then
+		ZEEK_PATH=/usr/local/zeek
+	elif [ -e /opt/zeek/etc/node.cfg ]; then
+		ZEEK_PATH=/opt/zeek
+	fi
+	# Zeek Status
+	if ! (command -v zeek > /dev/null); then
+		echo -e "    ${BOLD}●${RESET} zeek not installed"
+	elif [ -e /usr/local/bin/zeek ]; then
+		if (docker exec -it zeek zeekctl status > /dev/null); then
+			echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
+			# https://github.com/activecm/docker-zeek#readme
+			echo -e "        ${BLUE}●${RESET} zeek cron enabled via docker image by default"
+		else
+			echo -e "    ${YELLOW}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
+		fi
+	elif (zeekctl status > /dev/null); then
+		echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
+	else
+		echo -e "    ${YELLOW}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
+	fi
+	if [ -e /etc/cron.d/zeek ]; then
+		echo -e "        ${BLUE}●${RESET} zeek $($ZEEK_PATH/bin/zeekctl cron ?)"
+	else
+		echo -e "        ${BOLD}●${RESET} zeek cron not enabled"
+	fi
+}
 
-    # Zeek
-    # Zeek Profile
-    if [ -e /etc/profile.d/zeek-path.sh ]; then
-        source /etc/profile.d/zeek-path.sh
-    fi
-    if [ -e /etc/profile.d/zeek.sh ]; then
-        source /etc/profile.d/zeek.sh
-    fi
-    # Zeek PATH
-    ZEEK_PATH=''
-    if [ -e /usr/local/zeek/etc/node.cfg ]; then
-        ZEEK_PATH=/usr/local/zeek
-    elif [ -e /opt/zeek/etc/node.cfg ]; then
-        ZEEK_PATH=/opt/zeek
-    fi
-    # Zeek Status
-    if ! (command -v zeek > /dev/null); then
-        echo -e "    ${BOLD}●${RESET} zeek not installed"
-    elif [ -e /usr/local/bin/zeek ]; then
-        if (docker exec -it zeek zeekctl status > /dev/null); then
-            echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
-            # https://github.com/activecm/docker-zeek#readme
-            echo -e "        ${BLUE}●${RESET} zeek cron enabled via docker image by default"
-        else
-            echo -e "    ${YELLOW}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
-        fi
-    elif (zeekctl status > /dev/null); then
-        echo -e "    ${BLUE}●${RESET} zeek is ${GREEN}active & listening${RESET}    ZEEK_PATH=$ZEEK_PATH"
-    else
-        echo -e "    ${YELLOW}●${RESET} zeek inactive, crashed, or not shown    ZEEK_PATH=$ZEEK_PATH"
-    fi
-    if [ -e /etc/cron.d/zeek ]; then
-        echo -e "        ${BLUE}●${RESET} zeek $($ZEEK_PATH/bin/zeekctl cron ?)"
-    else
-        echo -e "        ${BOLD}●${RESET} zeek cron not enabled"
-    fi
+function RITAStatus() {
+	# RITA
+	if [ -e /usr/local/bin/rita ]; then
+		echo -e "    ${BLUE}●${RESET} rita installed"
+	elif (command -v docker > /dev/null && docker image list | grep -iq rita); then
+		echo -e "    ${BLUE}●${RESET} rita docker image installed"
+		echo -e "    ${BLUE}●${RESET} mongodb docker image installed"
+	else
+		echo -e "    ${BOLD}●${RESET} rita not installed"
+	fi
+	if [ -e /etc/cron.d/rita ]; then
+		echo -e "        ${BLUE}●${RESET} rita cron enabled"
+	else
+		echo -e "        ${BOLD}●${RESET} rita cron not enabled"
+	fi
+}
 
-    # RITA
-    if [ -e /usr/local/bin/rita ]; then
-        echo -e "    ${BLUE}●${RESET} rita installed"
-    elif (command -v docker > /dev/null && docker image list | grep -iq rita); then
-        echo -e "    ${BLUE}●${RESET} rita docker image installed"
-        echo -e "    ${BLUE}●${RESET} mongodb docker image installed"
-    else
-        echo -e "    ${BOLD}●${RESET} rita not installed"
-    fi
-    if [ -e /etc/cron.d/rita ]; then
-        echo -e "        ${BLUE}●${RESET} rita cron enabled"
-    else
-        echo -e "        ${BOLD}●${RESET} rita cron not enabled"
-    fi
+function MongoDBStatus() {
+	# MongoDB
+	if (systemctl is-active --quiet mongod.service); then
+		echo -e "    ${BLUE}●${RESET} mongodb ${GREEN}is active${RESET}"
+	elif ! (command -v mongod > /dev/null); then
+		echo -e "    ${BOLD}●${RESET} mongodb not installed"
+	else
+		echo -e "    ${BOLD}●${RESET} mongodb ${YELLOW}inactive${RESET}"
+	fi
+}
 
-    # MongoDB
-    if (systemctl is-active --quiet mongod.service); then
-        echo -e "    ${BLUE}●${RESET} mongodb ${GREEN}is active${RESET}"
-    elif ! (command -v mongod > /dev/null); then
-        echo -e "    ${BOLD}●${RESET} mongodb not installed"
-    else
-        echo -e "    ${BOLD}●${RESET} mongodb ${YELLOW}inactive${RESET}"
-    fi
-
+function BettercapUIStatus() {
     if [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
         echo ""
         echo "=====================[ Web UI Credentials ]========================="
@@ -1605,8 +1710,27 @@ function EchoStatus() {
         echo ""
         echo -e "${BOLD}[https]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
         echo -e "${BOLD}[https]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
+	echo "===================================================================="
         echo ""
     fi
+}
+
+function EchoStatus() {
+
+	# Final echo to terminal
+	echo ""
+	echo -e "${BLUE}[i]${RESET}Status:"
+
+	PacketForwardingStatus
+	ArpAntidoteStatus
+	BettercapStatus
+	DockerStatus
+	ZeekStatus
+	RITAStatus
+	MongoDBStatus
+	BettercapUIStatus
+
+
 }
 
 function InstallBettercap() {
@@ -1625,7 +1749,7 @@ function InstallBettercap() {
         CleanUp
         EchoStatus
     else
-        echo -e "${BLUE}[i]Bettercap already installed."
+        echo -e "${BLUE}[i]Bettercap already installed.${RESET}"
     fi
 
 }
@@ -1639,6 +1763,8 @@ function InstallZeek() {
     echo -e "${BLUE}[i]Checking path for zeek...${RESET}"
 
     if (command -v zeek > /dev/null); then
+    	echo -e "${BLUE}[i]Zeek found!${RESET}"
+    	sleep 1
         ConfigureZeek
         exit 0
     fi
@@ -1824,7 +1950,7 @@ function ManageMenu() {
     echo -e "What would you like to do?"
     echo -e ""
     echo -e "   1) Install Bettercap"
-    echo -e "   2) Install Zeek"
+    echo -e "   2) Install Zeek / Reconfigure Zeek"
     echo -e "   3) Install RITA + MongoDB (if installed, shows command examples)" 
     echo -e "   4) Start and enable the network visibility services"
     echo -e "   5) Stop and disable the network visibility services"
