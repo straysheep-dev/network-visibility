@@ -708,5 +708,34 @@ rita show-exploded-dns -H dataset_1 | less -S
 
 ## What Next?
 
-* Configure bettercap commands to [spin up as a service on start](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
-* Happy hunting!
+With Zeek listening you can monitor what it's ingesting in real time. Everything under your Zeek path of `logs/current/` is happening live before it's archived to a timestamped / dated folder.
+
+With `sudo tail -f /path/to/zeek/logs/current/dns.log` you could review DNS traffic live on the network you're monitoring.
+
+If you want to do a quick review of the current logs (or any specific or limited set of logs really) with rita:
+
+Import the logs into a temporary database:
+```bash
+rita import /path/to/your/logs temp_db
+```
+
+Review:
+```bash
+rita show-beacons temp_db -H
+```
+
+Delete the temporary database:
+```bash
+rita delete temp_db
+```
+
+If you want to ingest your most current logs, as in those that have not been archived and ingested via cron, into an existing database:
+```bash
+rita import --rolling /opt/zeek/logs/current db_name
+```
+
+Doing this, rita will not overwrite, create duplicates of, or erase, any log data previously imported into the data set with `--rolling`. So you can update the database live if you need to.
+
+You could also configure bettercap commands to [spin up as a service on start](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
+
+Most importantly: Happy hunting!

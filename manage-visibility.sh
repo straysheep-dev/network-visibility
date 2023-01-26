@@ -29,8 +29,8 @@ ZEEK_DOCKER_HASH='e4818fb390a74f645338e1571afd0dd92628377a74fef67de309633777fcc4
 ZEEK_GEN_CFG_HASH='1b13b9cb0ee1bc7662ad9c2551181e012d07d83848727f9277c64086d9ec330e'   # This value should never change
 ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b6721'  # This value should never change
 
-RITA_VER="${rita_ver:-4.6.0}"                                                        # Replace variable when latest release is available: https://github.com/activecm/rita/releases
-RITA_HASH='41b7db88c1e93ab634f8d0e276b83a45d3a49e8794f69e6dad4a37786ec73516'         # Replace variable when latest release is available
+RITA_VER="${rita_ver:-4.7.0}"                                                        # Replace variable when latest release is available: https://github.com/activecm/rita/releases
+RITA_HASH='0ba76eeedc6e4da73f7062cd11fc5ae04f9d0c739995efbcdcb17ca6b99031d8'         # Replace variable when latest release is available
 RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'    # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
 RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe' # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/docker-compose.yml
 
@@ -84,34 +84,43 @@ fi
 
 
 function IsRoot() {
-    # Root EUID check
-    if [ "${EUID}" -ne 0 ]; then
-        echo "You need to run this script as root"
-        exit 1
-    fi
+	# Root EUID check
+	if [ "${EUID}" -ne 0 ]; then
+		echo "You need to run this script as root"
+		exit 1
+	fi
 }
 
 function CheckOS() {
-    # Check OS version
-    OS="$(grep -E "^ID=" /etc/os-release | cut -d '=' -f 2)"
-    CODENAME="$(grep VERSION_CODENAME /etc/os-release | cut -d '=' -f 2)" # debian or ubuntu
-    echo -e "${BLUE}[i]${RESET}$OS ${GREEN}$CODENAME${RESET} detected."
-    if [[ $OS == "ubuntu" ]]; then
-        UBUNTU_VERSION=$(grep VERSION_ID /etc/os-release | cut -d '"' -f2)
-        MAJOR_UBUNTU_VERSION=$(grep VERSION_ID /etc/os-release | cut -d '"' -f2 | cut -d '.' -f 1)
-        if [[ $MAJOR_UBUNTU_VERSION -lt 18 ]]; then
-            echo "⚠️ Your version of Ubuntu is not supported."
-            echo ""
-            echo "18.04 or greater is required to run RITA + MongoDB + Zeek."
-            echo ""
-            until [[ $CONTINUE =~ ^(y|n)$ ]]; do
-                read -rp "Continue? [y/n]: " -e CONTINUE
-            done
-            if [[ $CONTINUE == "n" ]]; then
-                exit 1
-            fi
-        fi
-    fi
+	# Check OS version
+	OS="$(grep -E "^ID=" /etc/os-release | cut -d '=' -f 2)"
+	CODENAME="$(grep VERSION_CODENAME /etc/os-release | cut -d '=' -f 2)" # debian or ubuntu
+	echo -e "${BLUE}[i]${RESET}$OS ${GREEN}$CODENAME${RESET} detected."
+	if [[ $OS == "ubuntu" ]]; then
+		UBUNTU_VERSION=$(grep VERSION_ID /etc/os-release | cut -d '"' -f2)
+		MAJOR_UBUNTU_VERSION=$(grep VERSION_ID /etc/os-release | cut -d '"' -f2 | cut -d '.' -f 1)
+		if [[ $MAJOR_UBUNTU_VERSION -lt 18 ]]; then
+			echo "⚠️ Your version of Ubuntu is not supported."
+			echo ""
+			echo "18.04 or greater is required to run RITA + MongoDB + Zeek."
+			echo ""
+			until [[ $CONTINUE =~ ^(y|n)$ ]]; do
+				read -rp "Continue? [y/n]: " -e CONTINUE
+			done
+			if [[ $CONTINUE == "n" ]]; then
+				exit 1
+			fi
+		fi
+	elif [[ $OS == "kali" ]]; then
+		echo -e "[${YELLOW}i${RESET}]Kali support is currently in development. ${YELLOW}Not all features will work as expected.${RESET}"
+		echo ""
+#		until [[ $CONTINUE =~ ^(y|n)$ ]]; do
+#			read -rp "Continue? [y/n]: " -e CONTINUE
+#		done
+#		if [[ $CONTINUE == "n" ]]; then
+			exit 1
+#		fi
+	fi
 }
 
 function CheckInterface() {
