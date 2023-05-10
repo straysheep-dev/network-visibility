@@ -1561,6 +1561,14 @@ function UninstallRITA() {
 
 }
 
+function Uninstallntopng() {
+
+	echo -e "${YELLOW}[i]NOTE: This function is not yet complete. Some components will remain installed.${RESET}"
+	apt autoremove --purge -y ntopng
+	echo -e "${YELLOW}[✓]ntopng uninstalled.${RESET}"
+
+}
+
 function CleanUp() {
 	# CleanUp
 	if [ -e "$SETUPDIR" ]; then
@@ -1686,6 +1694,17 @@ function ZeekStatus() {
 	fi
 }
 
+function ntopngStatus() {
+	# ntopng
+	if ! (command -v ntopng > /dev/null); then
+		echo -e "    ${BOLD}●${RESET} ntopng not installed"
+	elif (systemctl is-active --quiet ntopng.service); then
+		echo -e "    ${BLUE}●${RESET} ntopng ${GREEN}is active${RESET}"
+	else
+		echo -e "    ${BOLD}●${RESET} ntopng ${YELLOW}inactive${RESET}"
+	fi
+}
+
 function RITAStatus() {
 	# RITA
 	if [ -e /usr/local/bin/rita ]; then
@@ -1739,6 +1758,7 @@ function EchoStatus() {
 	ArpAntidoteStatus
 	BettercapStatus
 	DockerStatus
+	ntopngStatus
 	ZeekStatus
 	RITAStatus
 	MongoDBStatus
@@ -1881,13 +1901,42 @@ function InstallRITA() {
 
 }
 
+function Installntopng() {
+
+	echo -e "${BLUE}[*]Checking path for ntopng...${RESET}"
+	if ! (command -v ntopng > /dev/null); then
+
+		CheckOS
+		MakeTemp
+
+		echo -e "${BLUE}[*]Installing ntopng...${RESET}"
+
+		# https://packages.ntop.org/apt-stable/
+		apt update
+		apt-get install -y software-properties-common wget
+		add-apt-repository universe
+		wget https://packages.ntop.org/apt-stable/"$UBUNTU_VERSION"/all/apt-ntop-stable.deb
+		apt install ./apt-ntop-stable.deb
+		apt-get clean all
+		apt-get update
+		apt-get install -y pfring-dkms nprobe ntopng n2disk cento
+
+		echo -e "${BLUE}[✓]Done.${RESET}"
+
+		CleanUp
+		EchoStatus
+	else
+		echo -e "${BLUE}[i]ntopng already installed.${RESET}"
+	fi
+}
+
 function Uninstall() {
 
     # Needs a better solution...
     echo -e "${BLUE}[i]Ctrl+c to quit this dialogue at any time.${RESET}"
     sleep 1
 
-    echo -e "${BLUE}[?]Uninstall current network visibility services?${RESET}"
+    echo -e "${BLUE}[>]Uninstall current network visibility services?${RESET}"
     until [[ $REMOVE_NET_SERVICES =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_NET_SERVICES
     done
@@ -1896,7 +1945,7 @@ function Uninstall() {
         RemoveServices
     fi
 
-    echo -e "${BLUE}[?]Uninstall Bettercap?${RESET}"
+    echo -e "${BLUE}[>]Uninstall Bettercap?${RESET}"
     until [[ $REMOVE_BETTERCAP =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_BETTERCAP
     done
@@ -1905,7 +1954,16 @@ function Uninstall() {
         UninstallBettercap
     fi
 
-    echo -e "${BLUE}[?]Uninstall Zeek?${RESET}"
+    echo -e "${BLUE}[>]Uninstall ntopng?${RESET}"
+    until [[ $REMOVE_NTOP =~ ^(y|n)$ ]]; do
+        read -rp "[y/n]? " REMOVE_NTOP
+    done
+
+    if [[ $REMOVE_NTOP == "y" ]]; then
+        Uninstallntopng
+    fi
+
+    echo -e "${BLUE}[>]Uninstall Zeek?${RESET}"
     until [[ $REMOVE_ZEEK =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_ZEEK
     done
@@ -1914,7 +1972,7 @@ function Uninstall() {
         UninstallZeek
     fi
 
-    echo -e "${BLUE}[?]Uninstall RITA?${RESET}"
+    echo -e "${BLUE}[>]Uninstall RITA?${RESET}"
     until [[ $REMOVE_RITA =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_RITA
     done
@@ -1923,7 +1981,7 @@ function Uninstall() {
         UninstallRITA
     fi
 
-    echo -e "${BLUE}[?]Uninstall MongoDB?${RESET}"
+    echo -e "${BLUE}[>]Uninstall MongoDB?${RESET}"
     until [[ $REMOVE_MONGODB =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_MONGODB
     done
@@ -1932,7 +1990,7 @@ function Uninstall() {
         UninstallMongoDBFromApt
     fi
 
-    echo -e "${BLUE}[?]Uninstall Docker?${RESET}"
+    echo -e "${BLUE}[>]Uninstall Docker?${RESET}"
     until [[ $REMOVE_DOCKER =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_DOCKER
     done
@@ -1941,7 +1999,7 @@ function Uninstall() {
         UninstallDocker
     fi
 
-    echo -e "${BLUE}[?]Uninstall Docker-Compose?${RESET}"
+    echo -e "${BLUE}[>]Uninstall Docker-Compose?${RESET}"
     until [[ $REMOVE_COMPOSE =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_COMPOSE
     done
@@ -1965,14 +2023,15 @@ function ManageMenu() {
     echo -e "   1) Install Bettercap"
     echo -e "   2) Install RITA + MongoDB (if installed, shows command examples)" 
     echo -e "   3) Install Zeek / Reconfigure Zeek"
-    echo -e "   4) Install or start the network visibility services"
-    echo -e "   5) Stop and disable the network visibility services"
-    echo -e "   6) Remove firewall rules"
-    echo -e "   7) Manage Cron Tasks"
-    echo -e "   8) Randomize the http(s)-ui credentials (after updating caplets)"
-    echo -e "   9) Uninstall network visibility services and optionally any installed packages"
-    echo -e "   10) Exit"
-    until [[ $MENU_OPTION =~ ^([1-9]|10)$ ]]; do
+    echo -e "   4) Install ntopng"
+    echo -e "   5) Install or start the network visibility services"
+    echo -e "   6) Stop and disable the network visibility services"
+    echo -e "   7) Remove firewall rules"
+    echo -e "   8) Manage Cron Tasks"
+    echo -e "   9) Randomize the http(s)-ui credentials (after updating caplets)"
+    echo -e "  10) Uninstall network visibility services and optionally any installed packages"
+    echo -e "   0) Exit"
+    until [[ $MENU_OPTION =~ ^([0-9]|10)$ ]]; do
         read -rp "Select an option [1-10]: " MENU_OPTION
     done
 
@@ -1987,24 +2046,27 @@ function ManageMenu() {
         InstallZeek
         ;;
     4)
-        StartServices
+        Installntopng
         ;;
     5)
-        StopServices
+        StartServices
         ;;
     6)
-        RemoveFirewallRules
+        StopServices
         ;;
     7)
-        ManageCronTasks
+        RemoveFirewallRules
         ;;
     8)
-        UpdateCredentials
+        ManageCronTasks
         ;;
     9)
-        Uninstall
+        UpdateCredentials
         ;;
     10)
+        Uninstall
+        ;;
+    0)
         exit 0
         ;;
     esac
