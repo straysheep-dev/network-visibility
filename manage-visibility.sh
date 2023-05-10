@@ -317,7 +317,7 @@ function InstallZeekFromApt() {
     
     apt-get update
     # https://docs.zeek.org/en/v4.1.1/install.html
-    apt-get install python3-git python3-semantic-version
+    apt-get -y install python3-git python3-semantic-version
 
     echo -e "${BLUE}[>]Installing zeek from download.opensuse.org via apt-get...${RESET}"
 
@@ -347,8 +347,7 @@ function InstallZeekFromApt() {
     fi
 
     apt-get update
-    # Allow user to confirm
-    apt-get install zeek
+    apt-get install -y zeek
 
     # Check to see if Zeek install was canceled
     if ! [ -e /opt/zeek/bin/zeek ]; then
@@ -636,7 +635,7 @@ function ConfigureZeek() {
 
 	InstallZkgPackages
 
-	if ! (zeekctl status > /dev/null); then
+	if ! ("$ZEEK_PATH"/bin/zeekctl status > /dev/null); then
 		until [[ $START_ZEEK_CHOICE =~ ^(y|n)$ ]]; do
 			read -rp "Start Zeek now? [y/n]: " -e START_ZEEK_CHOICE
 		done
@@ -997,6 +996,34 @@ function UpdateCredentials() {
 # Network Visibility Services
 #============================
 
+function RemoveFirewallRules() {
+
+	echo -e "${BLUE}[i] This script can remove all firewall rules for compatability.${RESET}"
+	echo -e "    You can skip this if you have rules configured in a specific way you want to keep."
+	echo -e "    Otherwise, it's recommended to do this to ensure all network traffic passes through."
+	echo ""
+	until [[ $REMOVE_FW_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "Remove all firewall rules? [y/n]: " -e REMOVE_FW_CHOICE
+	done
+	if [[ $REMOVE_FW_CHOICE == "y" ]]; then
+		if ! (ufw status verbose | grep -q "inactive"); then
+			echo -e "${BLUE}[>]Disabling ufw...${RESET}"
+			ufw disable
+		fi
+		if ! (iptables -S | grep -q "\-P INPUT ACCEPT" && iptables -S | grep -q "\-P FORWARD ACCEPT" && iptables -S | grep -q "\-P OUTPUT ACCEPT"); then
+			echo -e "${BLUE}[>]Removing all iptables rules...${RESET}"
+			iptables -F    # Flush all chains
+			iptables -X    # Delete all user-defined chains
+		fi
+		if ! (ip6tables -S | grep -q "\-P INPUT ACCEPT" && ip6tables -S | grep -q "\-P FORWARD ACCEPT" && ip6tables -S | grep -q "\-P OUTPUT ACCEPT"); then
+			echo -e "${BLUE}[>]Removing all ip6tables rules...${RESET}"
+			ip6tables -F    # Flush all chains
+			ip6tables -X    # Delete all user-defined chains
+		fi
+	fi
+
+}
+
 
 function InstallForwardingService() {
 
@@ -1046,13 +1073,12 @@ WantedBy=multi-user.target" >/etc/systemd/system/packet-forwarding.service
         systemctl enable packet-forwarding
 
 	echo ""
-        echo -e "${BOLD}[?]Start the packet forwarding service now?${RESET}"
+        echo -e "${BLUE}[?]Start the packet forwarding service now?${RESET}"
         until [[ $START_CHOICE_PACKET_FORWARDING =~ ^(y|n)$ ]]; do
             read -rp "[y/n]? " START_CHOICE_PACKET_FORWARDING
         done
 
         if [[ $START_CHOICE_PACKET_FORWARDING == "y" ]]; then
-            # Start antidoting the local area network
             # See https://www.bettercap.org/usage/scripting/
             # and https://github.com/bettercap/scripts
             # for some additional interesting uses.
@@ -1060,8 +1086,8 @@ WantedBy=multi-user.target" >/etc/systemd/system/packet-forwarding.service
             systemctl start packet-forwarding
             echo -e "${BLUE}[✓]Done.${RESET}"
         else
-            echo -e "${BLUE}[i]OK, packet forwarding won't start until next reboot or by running:${RESET}"
-            echo -e "${YELLOW}    [>]sudo systemctl restart packet-forwarding${RESET}"
+            echo -e "${BLUE}[*]OK, packet forwarding won't start until next reboot or by running:${RESET}"
+            echo -e "    ${YELLOW}sudo systemctl restart packet-forwarding${RESET}"
         fi
     fi
 
@@ -1069,26 +1095,17 @@ WantedBy=multi-user.target" >/etc/systemd/system/packet-forwarding.service
 
 function InstallBettercapArpService() {
 
-    # Check if the arp-cache antidoting service exists
-    if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
-        echo -e "${BLUE}[✓]bettercap arp-antidote service already installed...${RESET}"
-    elif (command -v bettercap > /dev/null); then
-        echo -e "${BLUE}[i]Installing bettercap arp-antidote service...${RESET}"
-        # Create arp-cache antidote as a service to spin up at boot
-        # Prompt for desktop or server usage
-        # Currently the only difference is the desktop service allows the http-ui on localhost.
-        # Will need to add the ability to setup ssl/tls for the https-ui to listen publicly.
-        echo ""
-        echo -e "${BOLD}[?]What type of machine is this?${RESET}"
-        until [[ $MACHINE_TYPE =~ ^(desktop|server)$ ]]; do
-            read -rp "[desktop/server]? " MACHINE_TYPE
-        done
+	# Check if the arp-cache antidoting service exists
+	if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
+		echo -e "${BLUE}[✓]Bettercap arp-antidote service already installed...${RESET}"
+	elif (command -v bettercap > /dev/null); then
+		echo -e "${BLUE}[*]Installing bettercap arp-antidote service...${RESET}"
 
-        echo -e "${BLUE}[i]Installing bettercap arp-cache antidoting as a service...${RESET}"
-
-        if [[ $MACHINE_TYPE == "desktop" ]]; then
-        # Based on https://github.com/bettercap/bettercap/blob/master/bettercap.service
-            echo "[Unit]
+		# Based on https://github.com/bettercap/bettercap/blob/master/bettercap.service
+		# "set arp.spoof.fullduplex true" appears to break the capture on most networks
+		# "http-ui on" and "api.rest on" are unnecessary for traffic capture, and also when firewall rules are likely off
+		# If you need to debug capturing, disable the services and run bettercap from the shell manually
+		echo "[Unit]
 Description=Capture LAN traffic for network forensics
 Documentation=https://bettercap.org, https://github.com/straysheep-dev/network-visibility
 Wants=network.target
@@ -1097,71 +1114,53 @@ After=network.target
 [Service]
 Type=simple
 PermissionsStartOnly=true
-ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on; set arp.spoof.fullduplex true; http-ui on'
+ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on'
 Restart=always
 RestartSec=30
 
 [Install]
 WantedBy=multi-user.target" >/etc/systemd/system/bettercap-arp-antidote.service
+	
+		systemctl daemon-reload
+		systemctl enable bettercap-arp-antidote
 
-        elif [[ $MACHINE_TYPE == "server" ]]; then
-        # Based on https://github.com/bettercap/bettercap/blob/master/bettercap.service
-            echo "[Unit]
-Description=Capture LAN traffic for network forensics
-Documentation=https://bettercap.org, https://github.com/straysheep-dev/network-visibility
-Wants=network.target
-After=network.target
+		echo ""
+		echo -e "${BLUE}[i]Start bettercap arp-cache antidoting the network now?${RESET}"
+		until [[ $START_CHOICE_BETTERCAP_ARP =~ ^(y|n)$ ]]; do
+			read -rp "[y/n]? " START_CHOICE_BETTERCAP_ARP
+		done
 
-[Service]
-Type=simple
-PermissionsStartOnly=true
-ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on; set arp.spoof.fullduplex true; api.rest on'
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target" >/etc/systemd/system/bettercap-arp-antidote.service
-        fi
-
-        systemctl daemon-reload
-        systemctl enable bettercap-arp-antidote
-
-	echo ""
-        echo -e "${BOLD}[?]Start bettercap arp-cache antidoting the network now?${RESET}"
-        until [[ $START_CHOICE_BETTERCAP_ARP =~ ^(y|n)$ ]]; do
-            read -rp "[y/n]? " START_CHOICE_BETTERCAP_ARP
-        done
-
-        if [[ $START_CHOICE_BETTERCAP_ARP == "y" ]]; then
-            # Start antidoting the local area network
-            # See https://www.bettercap.org/usage/scripting/
-            # and https://github.com/bettercap/scripts
-            # for some additional interesting uses.
-            echo -e "${BLUE}[i]Starting services...${RESET}"
-            systemctl start bettercap-arp-antidote
-            echo -e "${BLUE}[✓]Done.${RESET}"
-        else
-            echo -e "${BLUE}[i]OK, bettercap's arp-cache services won't start until next reboot or by running:${RESET}"
-            echo -e "${YELLOW}    [>]sudo systemctl restart bettercap-arp-antidote${RESET}"
-        fi
-    else
-        echo -e "${YELLOW}[i]Bettercap not installed, skipping installation of bettercap-arp-antidote.service${RESET}"
-    fi
+		if [[ $START_CHOICE_BETTERCAP_ARP == "y" ]]; then
+			# Start antidoting the local area network
+			# See https://www.bettercap.org/usage/scripting/
+			# and https://github.com/bettercap/scripts
+			# for some additional interesting uses.
+			echo -e "${BLUE}[i]Starting services...${RESET}"
+			systemctl start bettercap-arp-antidote
+		else
+			echo -e "${BLUE}[i]OK, the bettercap service won't start until next reboot or by running:${RESET}"
+			echo -e "    ${YELLOW}sudo systemctl restart bettercap-arp-antidote${RESET}"
+			exit 0
+		fi
+	else
+		echo -e "${YELLOW}[i]Bettercap not installed, skipping installation of bettercap-arp-antidote.service${RESET}"
+	fi
 }
 
 function InstallServices() {
 
-    # This function decides what services (above) are installed and enabled
-    # In all cases where intercepting traffic is necessary, packet-forwarding.service is the base service that's installed no matter what you're doing
-    
-    # To do:
-    # In the future there needs to be a way to make it easy to add additional methods as services.
-    # For example; a set of commands to do passive analysis vs actively intercepting with bettercap.
-    # Those functions will go above this one, and the choice / option to enable them will be handled here somehow.
-
-    InstallForwardingService
-    InstallBettercapArpService
-
+	until [[ $PACKET_FWD_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "Install the packet forwarding service? [y/n]: " -e PACKET_FWD_CHOICE
+	done
+	if [[ $PACKET_FWD_CHOICE == 'y' ]]; then
+		InstallForwardingService
+	fi
+	until [[ $BETTERCAP_SVC_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "Install bettercap as a service? [y/n]: " -e BETTERCAP_SVC_CHOICE
+	done
+	if [[ $BETTERCAP_SVC_CHOICE == 'y' ]]; then
+		InstallBettercapArpService
+	fi
 }
 
 function StartServices() {
@@ -1171,30 +1170,13 @@ function StartServices() {
 		echo -e "${YELLOW}bettercap not installed. Quitting...${RESET}"
 		exit 1
 	fi
-	
-	# It can take a few minutes before you start intercepting all traffic
-	# A good way to check this is by reviewing the arp cache on another locally networked machine
-	# The MAC address for the this box (running bettercap) and the gateway will show as the same value
-	echo -e "${YELLOW}[>]Starting network visibility services. This can take a few minutes before you can tail your current/*.log Zeek logs...${RESET}"
-
-	# packet-forwarding.service is the base service required no matter how you decide to intercept traffic
-	# That's why a check is performed to see if it's missing, and InstallServices will be called if it is.
-	# The remaining checks look for what known services are installed rather than what is not installed. If you chose them to be installed they will have a service file.
-	# Similarly if the packet-forwarding service is missing, that means you uninstalled all possible network visibility services.
-	# This is the current best solution to starting and stopping only the services chosen, and also allowing more services to be added to these same functions in the future.
-	if ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
-		echo -e "${BLUE}[i]Starting and enabling network visibility services...${RESET}"
-		sleep 2
-		InstallServices
-		exit 0
-	fi
 
 	# Checks for packet-forwarding.service
 	if [ -e /etc/systemd/system/packet-forwarding.service ]; then
 		if (systemctl is-active --quiet packet-forwarding.service); then
 			echo -e "${BLUE}[i]packet-forwarding.service already running.${RESET}"
 		elif (systemctl is-enabled --quiet packet-forwarding.service); then
-			echo -e "${BLUE}[i]restarting packet-forwarding.service...${RESET}"
+			echo -e "${BLUE}[i]Restarting packet-forwarding.service...${RESET}"
 			systemctl restart packet-forwarding
 		else
 			systemctl enable packet-forwarding
@@ -1207,12 +1189,17 @@ function StartServices() {
 		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
 			echo -e "${BLUE}[i]bettercap-arp-antidote.service already running.${RESET}"
 		elif (systemctl is-enabled --quiet bettercap-arp-antidote.service); then
-			echo -e "${BLUE}[i]restarting bettercap-arp-antidote.service...${RESET}"
+			echo -e "${BLUE}[i]Restarting bettercap-arp-antidote.service...${RESET}"
 			systemctl restart bettercap-arp-antidote
 		else
 			systemctl enable bettercap-arp-antidote
 			systemctl restart bettercap-arp-antidote
 		fi
+	fi
+	
+	# If services aren't installed, then do the install walkthrough
+	if ! [ -e /etc/systemd/system/bettercap-arp-antidote.service ] || ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
+		InstallServices
 	fi
 
 	echo -e "${BLUE}[✓]Done.${RESET}"
@@ -1221,18 +1208,12 @@ function StartServices() {
 
 function StopServices() {
 
-	# Check for bettercap
-	if ! [ -e /usr/local/bin/bettercap ]; then
-		echo -e "${YELLOW}bettercap not installed. Quitting...${RESET}"
-		exit 1
-	fi
-
-	echo -e "${BLUE}[i]Stopping network visibility services...${RESET}"
+	echo -e "${YELLOW}[i]Stopping network visibility services...${RESET}"
 
 	# Checks for bettercap-arp-antidote.service
 	if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
 		if ! (systemctl is-active --quiet bettercap-arp-antidote.service); then
-			echo "[i]bettercap-arp-antidote.service already stopped."
+			echo -e "${BLUE}[i]bettercap-arp-antidote.service already stopped.${RESET}"
 			systemctl disable bettercap-arp-antidote
 		else
 			systemctl stop bettercap-arp-antidote
@@ -1243,7 +1224,7 @@ function StopServices() {
 	# Checks for packet-forwarding.service
 	if [ -e /etc/systemd/system/packet-forwarding.service ]; then
 		if ! (systemctl is-active --quiet packet-forwarding.service); then
-			echo "[i]packet-forwarding.service already stopped."
+			echo -e "${BLUE}[i]packet-forwarding.service already stopped.${RESET}"
 			systemctl disable packet-forwarding
 		else
 			systemctl stop packet-forwarding
@@ -1421,13 +1402,11 @@ function ManageCronTasks() {
 	if ! (cat /etc/cron.d/rita 2>/dev/null); then
 		echo -e "${YELLOW}[i]No cron entry for RITA.${RESET}"
 	fi
-	echo "=============================================================="
 	echo ""
 	echo -e "=========================[ ${BLUE}Zeek${RESET} ]============================="
 	if ! (cat /etc/cron.d/zeek 2>/dev/null); then
 		echo -e "${YELLOW}[i]No cron entry for Zeek.${RESET}"
 	fi
-	echo "=============================================================="
 
 	echo -e ""
 	echo -e "What would you like to do?"
@@ -1460,20 +1439,13 @@ function ManageCronTasks() {
 
 function RemoveServices() {
 
-    # Undo and uninstall all system service components related to networking visibility
-
-    # You would add the removal commands of additional service components here, ie; if you were using passive traffic analysis 
-    # and implemented those commands as a service vs using active hijacking with bettercap as a service.
-
     StopServices
 
-    rm /etc/systemd/system/bettercap-arp-antidote.service
-    rm /etc/systemd/system/packet-forwarding.service
-    rm /etc/iptables/enable-forwarding.sh
-    rm /etc/iptables/disable-forwarding.sh
-    rm /etc/sysctl.d/20-packet-forwarding.conf
-
-    # Add paths to your own service files to be removed here if you've added any new services to this script
+    rm -f /etc/systemd/system/bettercap-arp-antidote.service
+    rm -f /etc/systemd/system/packet-forwarding.service
+    rm -f /etc/iptables/enable-forwarding.sh
+    rm -f /etc/iptables/disable-forwarding.sh
+    rm -f /etc/sysctl.d/20-packet-forwarding.conf
 
     echo -e "${BLUE}Reloading system daemons...${RESET}"
     sleep 2
@@ -1599,6 +1571,33 @@ function CleanUp() {
 # Management Functions (Status / Install / Uninstall / Menu)
 #===========================================================
 
+function FirewallStatus() {
+	# ufw
+	if (command -v ufw > /dev/null); then
+		if (ufw status | grep -q 'Status: active'); then
+			echo -e "    ${YELLOW}●${RESET} Firewall Status: active"
+		elif (ufw status | grep -q 'Status: inactive'); then
+			echo -e "    ${BLUE}●${RESET} Firewall Status: inactive"
+		else
+			echo -e "    ${YELLOW}●${RESET} Error reading firewall status"
+		fi
+	fi
+	# iptables
+	if (command -v iptables > /dev/null); then
+		if (iptables -S | grep -q "\-P INPUT ACCEPT" && iptables -S | grep -q "\-P FORWARD ACCEPT" && iptables -S | grep -q "\-P OUTPUT ACCEPT"); then
+			echo -e "    ${BLUE}●${RESET} iptables chains set to ACCEPT"
+		else
+			echo -e "    ${YELLOW}●${RESET} iptables has active rules"
+		fi
+	fi
+	if (command -v ip6tables > /dev/null); then
+		if (ip6tables -S | grep -q "\-P INPUT ACCEPT" && ip6tables -S | grep -q "\-P FORWARD ACCEPT" && ip6tables -S | grep -q "\-P OUTPUT ACCEPT"); then
+			echo -e "    ${BLUE}●${RESET} ip6tables chains set to ACCEPT."
+		else
+			echo -e "    ${YELLOW}●${RESET} ip6tables has active rules."
+		fi
+	fi
+}
 
 function PacketForwardingStatus() {
 	# packet-forwarding.service
@@ -1713,12 +1712,11 @@ function BettercapUIStatus() {
     if [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
         echo ""
         echo "=====================[ Web UI Credentials ]========================="
-        echo -e "${BLUE}[i](save in your credential manager)${RESET}"
-        echo -e "${BOLD}[http]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
-        echo -e "${BOLD}[http]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo -e "    ${BOLD}[http]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo -e "    ${BOLD}[http]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
         echo ""
-        echo -e "${BOLD}[https]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
-        echo -e "${BOLD}[https]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo -e "    ${BOLD}[https]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo -e "    ${BOLD}[https]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
 	echo "===================================================================="
         echo ""
     fi
@@ -1728,8 +1726,9 @@ function EchoStatus() {
 
 	# Final echo to terminal
 	echo ""
-	echo -e "${BLUE}[i]${RESET}Status:"
+	echo "Status:"
 
+	FirewallStatus
 	PacketForwardingStatus
 	ArpAntidoteStatus
 	BettercapStatus
@@ -1754,7 +1753,6 @@ function InstallBettercap() {
         InstallBettercapFromRelease
 
         UpdateCredentials
-        InstallServices
         CleanUp
         EchoStatus
     else
@@ -1882,20 +1880,14 @@ function Uninstall() {
     # Needs a better solution...
     echo -e "${BLUE}[i]Ctrl+c to quit this dialogue at any time.${RESET}"
     sleep 1
-    echo -e "${BLUE}[i]Beginning uninstall walkthrough...${RESET}"
-    sleep 1
 
-    if ! [ -e /etc/systemd/system/packet-forwarding.service ]; then
-        echo -e "${BLUE}[i]Network visibility services already uninstalled.${RESET}"
-    else
-        echo -e "${BLUE}[?]Uninstall current network visibility services?${RESET}"
-        until [[ $REMOVE_NET_SERVICES =~ ^(y|n)$ ]]; do
-            read -rp "[y/n]? " REMOVE_NET_SERVICES
-        done
+    echo -e "${BLUE}[?]Uninstall current network visibility services?${RESET}"
+    until [[ $REMOVE_NET_SERVICES =~ ^(y|n)$ ]]; do
+        read -rp "[y/n]? " REMOVE_NET_SERVICES
+    done
 
-        if [[ $REMOVE_NET_SERVICES == "y" ]]; then
-            RemoveServices
-        fi
+    if [[ $REMOVE_NET_SERVICES == "y" ]]; then
+        RemoveServices
     fi
 
     echo -e "${BLUE}[?]Uninstall Bettercap?${RESET}"
@@ -1965,16 +1957,17 @@ function ManageMenu() {
     echo -e "What would you like to do?"
     echo -e ""
     echo -e "   1) Install Bettercap"
-    echo -e "   2) Install Zeek / Reconfigure Zeek"
-    echo -e "   3) Install RITA + MongoDB (if installed, shows command examples)" 
-    echo -e "   4) Start and enable the network visibility services"
+    echo -e "   2) Install RITA + MongoDB (if installed, shows command examples)" 
+    echo -e "   3) Install Zeek / Reconfigure Zeek"
+    echo -e "   4) Install or start the network visibility services"
     echo -e "   5) Stop and disable the network visibility services"
-    echo -e "   6) Manage Cron Tasks"
-    echo -e "   7) Randomize the http(s)-ui credentials (after updating caplets)"
-    echo -e "   8) Uninstall network visibility services and optionally any installed packages"
-    echo -e "   9) Exit"
-    until [[ $MENU_OPTION =~ ^[1-9]$ ]]; do
-        read -rp "Select an option [1-9]: " MENU_OPTION
+    echo -e "   6) Remove firewall rules"
+    echo -e "   7) Manage Cron Tasks"
+    echo -e "   8) Randomize the http(s)-ui credentials (after updating caplets)"
+    echo -e "   9) Uninstall network visibility services and optionally any installed packages"
+    echo -e "   10) Exit"
+    until [[ $MENU_OPTION =~ ^([1-9]|10)$ ]]; do
+        read -rp "Select an option [1-10]: " MENU_OPTION
     done
 
     case $MENU_OPTION in
@@ -1982,10 +1975,10 @@ function ManageMenu() {
         InstallBettercap
         ;;
     2)
-        InstallZeek
+        InstallRITA
         ;;
     3)
-        InstallRITA
+        InstallZeek
         ;;
     4)
         StartServices
@@ -1994,15 +1987,18 @@ function ManageMenu() {
         StopServices
         ;;
     6)
-        ManageCronTasks
+        RemoveFirewallRules
         ;;
     7)
-        UpdateCredentials
+        ManageCronTasks
         ;;
     8)
-        Uninstall
+        UpdateCredentials
         ;;
     9)
+        Uninstall
+        ;;
+    10)
         exit 0
         ;;
     esac
