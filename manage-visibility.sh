@@ -1,14 +1,30 @@
 #!/bin/bash
 
-# https://www.activecountermeasures.com/why-is-my-program-running-slowly/
+# MIT License
 
-# Setup bettercap and the necesary services for intercepting traffic on a RITA server or desktop vm
-# Version=0.4 (tested on 18.04.x, 20.04.x, Desktop, Server, Raspberry Pi 4B-8GB)
+# Setup bettercap and services for intercepting and inspecting traffic
+# Version=0.5 (Tested on 20.04.x Desktop)
 
 # shellcheck disable=SC2181
 # shellcheck disable=SC2166
 # shellcheck disable=SC1091
 # shellcheck disable=SC2016
+
+# Thanks to the following projects for code, ideas, and guidance:
+# https://github.com/activecm/rita
+# https://github.com/zeek/zeek
+# https://github.com/g0tmi1k/OS-Scripts
+# https://github.com/angristan/wireguard-install
+
+# Resources:
+# https://www.activecountermeasures.com/why-is-my-program-running-slowly/
+# docker-zeek https://github.com/activecm/docker-zeek/tree/master/etc
+# gen-node-cfg.sh https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh"
+# node.cfg-template https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template"
+# networks.cfg https://raw.githubusercontent.com/activecm/docker-zeek/master/etc/networks.cfg
+# node.cfg     https://raw.githubusercontent.com/activecm/docker-zeek/master/etc/node.example.cfg
+# zeekctl.cfg  https://raw.githubusercontent.com/activecm/docker-zeek/master/etc/zeekctl.cfg
+
 
 #=====
 # Vars
@@ -23,30 +39,30 @@ RESET="\033[00m"     # reset
 
 PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)" # Public Network Interface Card
 
-ZEEK_VER="${zeek_ver:-5.1.1}"                                                    # Replace this variable when latest release is available: https://github.com/zeek/zeek/releases/
-ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'                              # Replace this variable when a new key is available: https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
+ZEEK_VER="${zeek_ver:-5.1.1}"                                                          # Replace this variable when latest release is available: https://github.com/zeek/zeek/releases/
+ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'                                    # Replace this variable when a new key is available: https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
 ZEEK_DOCKER_HASH='e4818fb390a74f645338e1571afd0dd92628377a74fef67de309633777fcc470'    # Replace variable when latest release is available: https://github.com/activecm/docker-zeek/blob/master/zeek
 ZEEK_GEN_CFG_HASH='1b13b9cb0ee1bc7662ad9c2551181e012d07d83848727f9277c64086d9ec330e'   # This value should never change
 ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b6721'  # This value should never change
 
-RITA_VER="${rita_ver:-4.7.0}"                                                        # Replace variable when latest release is available: https://github.com/activecm/rita/releases
-RITA_HASH='0ba76eeedc6e4da73f7062cd11fc5ae04f9d0c739995efbcdcb17ca6b99031d8'         # Replace variable when latest release is available
-RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'    # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
-RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe' # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/docker-compose.yml
+RITA_VER="${rita_ver:-4.7.0}"                                                          # Replace variable when latest release is available: https://github.com/activecm/rita/releases
+RITA_HASH='0ba76eeedc6e4da73f7062cd11fc5ae04f9d0c739995efbcdcb17ca6b99031d8'           # Replace variable when latest release is available
+RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'      # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
+RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe'   # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/docker-compose.yml
 
-DOCKER_COMPOSE_VER="${docker_compose_ver:-2.14.0}"                           # Replace this variable when latest binary release is available: https://github.com/docker/compose/releases
-DOCKER_COMPOSE_HASH=''                                                       # Leave blank
+DOCKER_COMPOSE_VER="${docker_compose_ver:-2.14.0}"                                     # Replace this variable when latest binary release is available: https://github.com/docker/compose/releases
+DOCKER_COMPOSE_HASH=''                                                                 # Leave blank
 
-GO_VER="${go_ver:-1.19.3}"                                                   # Replace this variable when latest binary release is available: https://go.dev/doc/install
-GO_BIN=''                                                                    # Leave blank
-GO_HASH=''                                                                   # Leave blank
+GO_VER="${go_ver:-1.19.3}"                                                             # Replace this variable when latest binary release is available: https://go.dev/doc/install
+GO_BIN=''                                                                              # Leave blank
+GO_HASH=''                                                                             # Leave blank
 
-BETTERCAP_BIN=''                                                             # Leave blank
-BETTERCAP_VER="${bettercap_ver:-2.31.1}"                                     # Replace this variable when latest binary release is available: https://github.com/bettercap/bettercap/releases/
-BETTERCAP_HASH=''                                                            # Leave blank
+BETTERCAP_BIN=''                                                                       # Leave blank
+BETTERCAP_VER="${bettercap_ver:-2.31.1}"                                               # Replace this variable when latest binary release is available: https://github.com/bettercap/bettercap/releases/
+BETTERCAP_HASH=''                                                                      # Leave blank
 
-HTTP_CONF='/usr/local/share/bettercap/caplets/http-ui.cap'                   # Default path to http(s) conf files that contain credentials
-HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'                 # Default path to http(s) conf files that contain credentials
+HTTP_CONF='/usr/local/share/bettercap/caplets/http-ui.cap'                             # Default path to http(s) conf files that contain credentials
+HTTPS_CONF='/usr/local/share/bettercap/caplets/https-ui.cap'                           # Default path to http(s) conf files that contain credentials
 
 # Arch Check
 if (dpkg --print-architecture | grep -qx 'amd64'); then
@@ -66,16 +82,6 @@ elif (dpkg --print-architecture | grep -qx 'arm64'); then
 else
     echo "${BOLD}[i]Currently supported architectures: x86_64 (amd64), aarch64 (arm64)${RESET}" && exit 1
 fi
-
-
-# Zeek Configuration File Examples / Templates:
-# https://github.com/activecm/docker-zeek/tree/master/etc
-# https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh"
-# https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template"
-# networks.cfg https://raw.githubusercontent.com/activecm/docker-zeek/master/etc/networks.cfg
-# node.cfg     https://raw.githubusercontent.com/activecm/docker-zeek/master/etc/node.example.cfg
-# zeekctl.cfg  https://raw.githubusercontent.com/activecm/docker-zeek/master/etc/zeekctl.cfg
-
 
 
 #===============================
@@ -154,12 +160,12 @@ function MakeTemp() {
     export SETUPDIR
 
     cd "$SETUPDIR" || (echo "Failed changing into setup directory. Quitting." && exit 1)
-    echo -e "${BLUE}[i]Changing working directory to $SETUPDIR${RESET}"
+    echo -e "${BLUE}[*]Changing working directory to $SETUPDIR${RESET}"
 
 }
 
 function InstallEssentialPackages() {
-    echo -e "${BLUE}[i]Installing essential packages from apt-get...${RESET}"
+    echo -e "${BLUE}[*]Installing essential packages from apt-get...${RESET}"
     apt install -y ca-certificates curl git gnupg lsb-release libpcap0.8 libusb-1.0-0 libnetfilter-queue1 unzip wget
     echo -e "${BLUE}[✓]Done.${RESET}"
     sleep 2
@@ -206,7 +212,7 @@ function InstallDocker() {
     fi
 
     if (command -v docker > /dev/null); then
-        echo -e "${BLUE}[i]Getting docker version information...${RESET}"
+        echo -e "${BLUE}[*]Getting docker version information...${RESET}"
         sleep 1
         docker version
         echo -e "${BLUE}[✓]docker installed.${RESET}"
@@ -226,15 +232,15 @@ function InstallDockerCompose() {
         curl -fsSLO "https://github.com/docker/compose/releases/download/v$DOCKER_COMPOSE_VER/docker-compose-linux-$(uname -m)"
         # Can't rename the binary based on $(uname -s) because l becomes L and isn't parsed by $(sha256sum -c ...) correctly.
 
-        echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+        echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
         # Check against known hash
         if ! (grep "$DOCKER_COMPOSE_HASH" "$SETUPDIR/docker-compose-linux-$(uname -m).sha256"); then
-            echo "${RED}Bad checksum, quitting...${RESET}"
+            echo "${RED}[i]Bad checksum, quitting...${RESET}"
             exit 1
         fi
         # Check against downloaded hash
         if ! (sha256sum -c "$SETUPDIR/docker-compose-linux-$(uname -m).sha256"); then
-            echo "${RED}Bad checksum, quitting...${RESET}"
+            echo "${RED}[i]Bad checksum, quitting...${RESET}"
             exit 1
         fi
         # If 'Docker-Compose OK' add it to your path, otherwise exit, leaving the binary behind in $SETUPDIR to examine.
@@ -247,7 +253,7 @@ function InstallDockerCompose() {
     fi
 
     if (command -v docker-compose > /dev/null); then
-        echo -e "${BLUE}[i]Getting docker-compose version information...${RESET}"
+        echo -e "${BLUE}[*]Getting docker-compose version information...${RESET}"
         docker-compose --version
         echo -e "${BLUE}[✓]docker-compose installed.${RESET}"
     else
@@ -380,7 +386,7 @@ function InstallZeekFromSource() {
     curl -LfO https://github.com/zeek/zeek/releases/download/v"$ZEEK_VER"/zeek-"$ZEEK_VER".tar.gz && \
     curl -LfO https://github.com/zeek/zeek/releases/download/v"$ZEEK_VER"/zeek-"$ZEEK_VER".tar.gz.asc
 
-    echo -e "${BLUE}[i]${RESET}Checking signature..."
+    echo -e "${BLUE}[*]${RESET}Checking signature..."
 
     gpg --keyid-format long --keyserver hkps://keyserver.ubuntu.com:443 --recv-keys "$ZEEK_GPG"
     gpg --verify --keyid-format long zeek-"$ZEEK_VER".tar.gz.asc zeek-"$ZEEK_VER".tar.gz
@@ -399,7 +405,7 @@ function InstallZeekFromSource() {
 
     sleep 2
 
-    echo -e "${BLUE}[i]${RESET}Installing dependancies..."
+    echo -e "${BLUE}[*]${RESET}Installing dependancies..."
 
     # Need to check if these are required when building from source...
     apt-get install python3-git python3-semantic-version
@@ -409,7 +415,7 @@ function InstallZeekFromSource() {
 
     sleep 2
 
-    echo -e "${BLUE}[i]${RESET}Unpacking archive..."
+    echo -e "${BLUE}[*]${RESET}Unpacking archive..."
 
     # Unpack the archive
     tar -xzvf zeek-"$ZEEK_VER".tar.gz
@@ -422,23 +428,23 @@ function InstallZeekFromSource() {
     # Otherwise, cross-compiling requires pre-built dependancies from the target system already available...
     # https://docs.zeek.org/en/v4.1.1/install.html#id3
 
-    echo -e "${BLUE}[i]${RESET}Running ./configure..."
+    echo -e "${BLUE}[*]${RESET}Running ./configure..."
     # ./configure --help
     ./configure
 
     sleep 2
 
-    echo -e "${BLUE}[i]${RESET}Running make..."
+    echo -e "${BLUE}[*]${RESET}Running make..."
     make
 
     sleep 2
 
-    echo -e "${BLUE}[i]${RESET}Running make install..."
+    echo -e "${BLUE}[*]${RESET}Running make install..."
     make install
 
     sleep 2
 
-    echo -e "${BLUE}[i]${RESET}Adding Zeek binaries to system PATH..."
+    echo -e "${BLUE}[*]${RESET}Adding Zeek binaries to system PATH..."
 
     # Add zeek binaries to PATH for this script to use:
     export PATH="$ZEEK_PATH"/bin:$PATH
@@ -467,7 +473,7 @@ function InstallZeekFromDocker() {
     ZEEK_PATH="${zeek_path:-/opt/zeek/}"
 
     curl -Lf 'https://raw.githubusercontent.com/activecm/docker-zeek/master/zeek' > zeek
-    echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+    echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
     if ! (sha256sum "$SETUPDIR/zeek" | grep -x  "$ZEEK_DOCKER_HASH  $SETUPDIR/zeek"); then
         echo -e "${RED}[i]Bad checksum. Quitting.${RESET}"
         exit 1
@@ -511,31 +517,31 @@ function InstallNodeCfgScript() {
 	fi
 
 	if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh ]; then
-		echo -e "${BLUE}[i]Downloading gen-node-cfg.sh...${RESET}"
+		echo -e "${BLUE}[*]Downloading gen-node-cfg.sh...${RESET}"
 		curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh" -o "$SETUPDIR/gen-node-cfg.sh"
 
-		echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+		echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
 		if ! (sha256sum "$SETUPDIR/gen-node-cfg.sh" | grep -x "$ZEEK_GEN_CFG_HASH  $SETUPDIR/gen-node-cfg.sh"); then
-			echo "${RED}Bad checksum, quitting...${RESET}"
+			echo "${RED}[i]Bad checksum, quitting...${RESET}"
 			exit 1
 		else
 			echo -e "${GREEN}OK${RESET}"
-			echo -e "${YELLOW}[i]Moving $SETUPDIR/gen-node-cfg.sh    ->  $ZEEK_PATH/share/zeek-cfg/gen-node-cfg.sh${RESET}"
+			echo -e "${YELLOW}[*]Moving $SETUPDIR/gen-node-cfg.sh    ->  $ZEEK_PATH/share/zeek-cfg/gen-node-cfg.sh${RESET}"
 			chmod 755 "$SETUPDIR"/gen-node-cfg.sh
 			mv "$SETUPDIR"/gen-node-cfg.sh "$ZEEK_PATH"/share/zeek-cfg/gen-node-cfg.sh
 		fi
 	fi
 	if ! [ -e "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template ]; then
-		echo -e "${BLUE}[i]Downloading node.cfg-template...${RESET}"
+		echo -e "${BLUE}[*]Downloading node.cfg-template...${RESET}"
 		curl -sSL "https://raw.githubusercontent.com/activecm/bro-install/master/node.cfg-template" -o "$SETUPDIR/node.cfg-template"
 
-		echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+		echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
 		if ! (sha256sum "$SETUPDIR/node.cfg-template" | grep -x "$ZEEK_NODE_CFG_HASH  $SETUPDIR/node.cfg-template"); then
-			echo "${RED}Bad checksum, quitting...${RESET}"
+			echo "${RED}[i]Bad checksum, quitting...${RESET}"
 			exit 1
 		else
 			echo -e "${GREEN}OK${RESET}"
-			echo -e "${YELLOW}[i]Moving $SETUPDIR/node.cfg-template  ->  $ZEEK_PATH/share/zeek-cfg/node.cfg-template${RESET}"
+			echo -e "${YELLOW}[*]Moving $SETUPDIR/node.cfg-template  ->  $ZEEK_PATH/share/zeek-cfg/node.cfg-template${RESET}"
 			chmod 644 "$SETUPDIR"/node.cfg-template
 			mv "$SETUPDIR"/node.cfg-template "$ZEEK_PATH"/share/zeek-cfg/node.cfg-template
 		fi
@@ -562,9 +568,9 @@ function InstallZkgPackages() {
 
         # Install zeek-open-connections plugin for monitoring long-running, open connections
         if ! ("$ZEEK_PATH"/bin/zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
-            echo -e "${BLUE}[i]Refreshing zkg packages...${RESET}"
+            echo -e "${BLUE}[*]Refreshing zkg packages...${RESET}"
             "$ZEEK_PATH"/bin/zkg refresh
-            echo -e "${BLUE}[i]Installing zeek-open-connections...${RESET}"
+            echo -e "${BLUE}[*]Installing zeek-open-connections...${RESET}"
             "$ZEEK_PATH"/bin/zkg install zeek/activecm/zeek-open-connections
         fi
      fi
@@ -573,9 +579,9 @@ function InstallZkgPackages() {
         # To install the plugin for open or long-running connections:
         # https://github.com/activecm/docker-zeek#install-a-plugin
         if ! (docker exec -it zeek zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
-            echo -e "${BLUE}[i]Refreshing zkg packages...${RESET}"
+            echo -e "${BLUE}[*]Refreshing zkg packages...${RESET}"
             docker exec -it zeek zkg refresh
-            echo -e "${BLUE}[i]Installing zeek-open-connections...${RESET}"
+            echo -e "${BLUE}[*]Installing zeek-open-connections...${RESET}"
             docker exec -it zeek zkg install zeek/activecm/zeek-open-connections
         fi
     fi
@@ -591,7 +597,7 @@ function StartZeek() {
 
         sleep 2
         # Print status
-        echo -e "${BLUE}[i]Getting Zeekctl status...${RESET}"
+        echo -e "${BLUE}[*]Getting Zeekctl status...${RESET}"
         "$ZEEK_PATH"/bin/zeekctl status
         if [ "$?" -eq "0" ]; then
             echo -e "${BLUE}[✓]Zeek installed and running.${RESET}"
@@ -606,7 +612,7 @@ function StartZeek() {
         /usr/local/bin/zeek start
         sleep 2
         # Print status
-        echo -e "${BLUE}[i]Getting Zeekctl status...${RESET}"
+        echo -e "${BLUE}[*]Getting Zeekctl status...${RESET}"
         /usr/local/bin/zeek status
         if [ "$?" -eq "0" ]; then
             sleep 2
@@ -652,7 +658,7 @@ function InstallRITAFromScript() {
     echo -e "${BLUE}[>]Installing RITA via installer script...${RESET}"
 
     curl -Lf 'https://raw.githubusercontent.com/activecm/rita/v'"$RITA_VER"'/install.sh' > rita-installer.sh && \
-    echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+    echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
     if ! (sha256sum "$SETUPDIR/rita-installer.sh" | grep -x  "$RITA_HASH  $SETUPDIR/rita-installer.sh"); then
         echo -e "${RED}[i]Bad checksum. Quitting.${RESET}"
         exit 1
@@ -679,9 +685,9 @@ function InstallRITAFromScript() {
 
 function InstallRITAFromSource() {
 
-    echo -e "${BLUE}[i]Installing RITA from source...${RESET}"
+    echo -e "${BLUE}[*]Installing RITA from source...${RESET}"
     sleep 1
-    echo -e "${BLUE}[i]Downloading go from https://go.dev/dl/...${RESET}"
+    echo -e "${BLUE}[*]Downloading go from https://go.dev/dl/...${RESET}"
     
     # https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md
 
@@ -695,7 +701,7 @@ function InstallRITAFromSource() {
     # https://go.dev/doc/install (previously https://golang.org/doc/install)
     curl -LfO "https://go.dev/dl/$GO_BIN" && \
 
-    echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+    echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
     if ! (sha256sum "$SETUPDIR/$GO_BIN" | grep -x "$GO_HASH  $SETUPDIR/$GO_BIN"); then
         echo -e "${RED}[i]Bad checksum. Quitting.${RESET}"
         exit 1
@@ -709,7 +715,7 @@ function InstallRITAFromSource() {
     fi
 
     # Add go binary to PATH
-    echo -e "${BLUE}[i]Unpacking archive and adding go to PATH...${RESET}"
+    echo -e "${BLUE}[*]Unpacking archive and adding go to PATH...${RESET}"
     sleep 2
     tar -C /usr/local -xzf "$SETUPDIR/$GO_BIN"
 
@@ -732,7 +738,7 @@ function InstallRITAFromSource() {
 
     # Ensure PATH exported correctly for script
     if (go version); then
-        echo -e "${BLUE}[i]go installed successfully.${RESET}"
+        echo -e "${BLUE}[✓]go installed successfully.${RESET}"
         sleep 2
     else
         echo -e "${RED}[i]go binary not found, quitting...${RESET}"
@@ -740,16 +746,16 @@ function InstallRITAFromSource() {
     fi
 
     # Ensure make is installed to build RITA
-    echo -e "${BLUE}[i]Ensuring make is installed to build RITA...${RESET}"
+    echo -e "${BLUE}[*]Ensuring make is installed to build RITA...${RESET}"
     apt-get -y install make
     sleep 2
 
     # Clone RITA from GitHub
-    echo -e "${BLUE}[i]Cloning RITA source from GitHub...${RESET}"
+    echo -e "${BLUE}[*]Cloning RITA source from GitHub...${RESET}"
     git clone 'https://github.com/activecm/rita.git'
     cd rita || exit 1
 
-    echo -e "${BLUE}[i]Building and installing RITA...${RESET}"
+    echo -e "${BLUE}[*]Building and installing RITA...${RESET}"
     sleep 2
 
     # this yields a rita binary in cwd
@@ -764,12 +770,12 @@ function InstallRITAFromSource() {
         exit 1
     fi
 
-    echo -e "${BLUE}[i]Done.${RESET}"
+    echo -e "${BLUE}[✓]Done.${RESET}"
     sleep 3
 
     # RITA requires a few directories to be created for it to function correctly.
     # https://github.com/activecm/rita/blob/master/docs/Manual%20Installation.md#configuring-the-system
-    echo -e "${BLUE}[i]Creating necessary directories...${RESET}"
+    echo -e "${BLUE}[*]Creating necessary directories...${RESET}"
     sleep 2
 
     mkdir /etc/rita && chmod 755 /etc/rita
@@ -778,11 +784,11 @@ function InstallRITAFromSource() {
 
     # modify the config file as needed and test using the rita test-config command
     if (command -v rita > /dev/null); then
-        echo -e "${BLUE}[i]Testing RITA configuration...${RESET}"
+        echo -e "${BLUE}[*]Testing RITA configuration...${RESET}"
         sleep 2
         rita test-config
         sleep 1
-        echo -e "${BLUE}[i]Done.${RESET}"
+        echo -e "${BLUE}[✓]Done.${RESET}"
         sleep 1
         rita --version
         echo -e "${BLUE}[✓]Rita installed.${RESET}"
@@ -798,7 +804,7 @@ function InstallRITAFromDocker() {
 
     if ! (docker image list | grep -iq rita); then
 
-        echo -e "${BLUE}[i]Installing RITA via docker...${RESET}"
+        echo -e "${BLUE}[*]Installing RITA via docker...${RESET}"
 
         # Check for Zeek PATH
         if [ -e /opt/zeek ]; then
@@ -844,7 +850,7 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/etc/rita.yaml' > /etc/rita/config.yaml
         curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/docker-compose.yml' > /etc/rita/docker-compose.yml
         
-        echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+        echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
         if ! (sha256sum /etc/rita/config.yaml | grep -x  "$RITA_CONF_HASH  /etc/rita/config.yaml"); then
             echo -e "${RED}[i]Bad checksum. Quitting.${RESET}"
             exit 1
@@ -889,7 +895,7 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
 
 function InstallBettercapFromRelease() {
 
-    echo -e "${BLUE}[i]Installing bettercap from GitHub release...${RESET}"
+    echo -e "${BLUE}[*]Installing bettercap from GitHub release...${RESET}"
  
 
     # Install bettercap pre-compiled binary from GitHub
@@ -898,13 +904,13 @@ function InstallBettercapFromRelease() {
     curl -fsSL 'https://github.com/bettercap/bettercap/releases/download/v'"$BETTERCAP_VER"'/'"$BETTERCAP_BIN"'.sha256' > "$SETUPDIR"/"$BETTERCAP_BIN"'.sha256'
     curl -fsSL 'https://github.com/bettercap/bettercap/releases/download/v'"$BETTERCAP_VER"'/'"$BETTERCAP_BIN"'.zip' > "$SETUPDIR"/"$BETTERCAP_BIN"'.zip'
 
-    echo -e "${BLUE}[i]Extracting bettercap binary from archive...${RESET}"
+    echo -e "${BLUE}[*]Extracting bettercap binary from archive...${RESET}"
     unzip "$SETUPDIR/$BETTERCAP_BIN".zip 'bettercap'
 
     sleep 1
 
     echo ""
-    echo -e "${BLUE}[i]Checking sha256sum...${RESET}"
+    echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
     # Check against known hash
     if ! (grep -xE "SHA256\(bettercap\)= $BETTERCAP_HASH" "$SETUPDIR/$BETTERCAP_BIN".sha256); then
         echo "${RED}Bad checksum, quitting...${RESET}"
@@ -919,7 +925,7 @@ function InstallBettercapFromRelease() {
 
     sleep 2
 
-    echo -e "${BLUE}[i]Installing bettercap...${RESET}"
+    echo -e "${BLUE}[*]Installing bettercap...${RESET}"
     chmod 755 ./bettercap
     chown root:root ./bettercap
     mv ./bettercap -t /usr/local/bin/
@@ -946,7 +952,7 @@ function InstallBettercapFromRelease() {
 
     # Update caplets and web-ui
     echo ""
-    echo -e "${BLUE}[i]Updating bettercap resources...${RESET}"
+    echo -e "${BLUE}[*]Updating bettercap resources...${RESET}"
     bettercap -eval "caplets.update; ui.update; q" || (echo "Error updating bettercap resources. Quitting." && exit 1)
 
     sleep 2 
@@ -960,7 +966,7 @@ function UpdateCredentials() {
 		exit 1
 	fi
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTP_CONF"); then
-		echo -e "${BLUE}[i]Replacing default http web interface credentials (user::pass)...${RESET}"
+		echo -e "${BLUE}[*]Replacing default http web interface credentials (user::pass)...${RESET}"
 		sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
 		sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
 		# Restart bettercap for http-ui to accept new credentials
@@ -973,11 +979,11 @@ function UpdateCredentials() {
 	fi
 	# Replace default https credentials if found
 	if ! [ -e /usr/local/share/bettercap/caplets/https-ui.cap ]; then
-		echo -e "${YELLOW}[i]https-ui.cap not found. Quitting...${RESET}"
+		echo -e "${YELLOW}[*]https-ui.cap not found. Quitting...${RESET}"
 		exit 1
 	fi
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTPS_CONF"); then
-		echo -e "${BLUE}[i]Replacing default https web interface credentials (user::pass)...${RESET}"
+		echo -e "${BLUE}[*]Replacing default https web interface credentials (user::pass)...${RESET}"
 		sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
 		sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
 		# Restart bettercap for https-ui to accept new credentials
@@ -1033,7 +1039,7 @@ function InstallForwardingService() {
     else
         # Create a persistent sysctl service for packet forwarding rules from walkthrough
         # https://github.com/straysheep-dev/network-visibility#arp-poisoning-antidoting-the-network
-        echo -e "${BLUE}[i]Creating a sysctl service for packet forwarding...${RESET}"
+        echo -e "${BLUE}[*]Creating a sysctl service for packet forwarding...${RESET}"
 
         sleep 2
 
@@ -1082,7 +1088,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/packet-forwarding.service
             # See https://www.bettercap.org/usage/scripting/
             # and https://github.com/bettercap/scripts
             # for some additional interesting uses.
-            echo -e "${BLUE}[i]Starting packet forwarding service...${RESET}"
+            echo -e "${BLUE}[*]Starting packet forwarding service...${RESET}"
             systemctl start packet-forwarding
             echo -e "${BLUE}[✓]Done.${RESET}"
         else
@@ -1125,7 +1131,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/bettercap-arp-antidote.service
 		systemctl enable bettercap-arp-antidote
 
 		echo ""
-		echo -e "${BLUE}[i]Start bettercap arp-cache antidoting the network now?${RESET}"
+		echo -e "${BLUE}[>]Start bettercap arp-cache antidoting the network now?${RESET}"
 		until [[ $START_CHOICE_BETTERCAP_ARP =~ ^(y|n)$ ]]; do
 			read -rp "[y/n]? " START_CHOICE_BETTERCAP_ARP
 		done
@@ -1135,7 +1141,7 @@ WantedBy=multi-user.target" >/etc/systemd/system/bettercap-arp-antidote.service
 			# See https://www.bettercap.org/usage/scripting/
 			# and https://github.com/bettercap/scripts
 			# for some additional interesting uses.
-			echo -e "${BLUE}[i]Starting services...${RESET}"
+			echo -e "${BLUE}[*]Starting services...${RESET}"
 			systemctl start bettercap-arp-antidote
 		else
 			echo -e "${BLUE}[i]OK, the bettercap service won't start until next reboot or by running:${RESET}"
@@ -1176,7 +1182,7 @@ function StartServices() {
 		if (systemctl is-active --quiet packet-forwarding.service); then
 			echo -e "${BLUE}[i]packet-forwarding.service already running.${RESET}"
 		elif (systemctl is-enabled --quiet packet-forwarding.service); then
-			echo -e "${BLUE}[i]Restarting packet-forwarding.service...${RESET}"
+			echo -e "${BLUE}[*]Restarting packet-forwarding.service...${RESET}"
 			systemctl restart packet-forwarding
 		else
 			systemctl enable packet-forwarding
@@ -1189,7 +1195,7 @@ function StartServices() {
 		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
 			echo -e "${BLUE}[i]bettercap-arp-antidote.service already running.${RESET}"
 		elif (systemctl is-enabled --quiet bettercap-arp-antidote.service); then
-			echo -e "${BLUE}[i]Restarting bettercap-arp-antidote.service...${RESET}"
+			echo -e "${BLUE}[*]Restarting bettercap-arp-antidote.service...${RESET}"
 			systemctl restart bettercap-arp-antidote
 		else
 			systemctl enable bettercap-arp-antidote
@@ -1208,7 +1214,7 @@ function StartServices() {
 
 function StopServices() {
 
-	echo -e "${YELLOW}[i]Stopping network visibility services...${RESET}"
+	echo -e "${YELLOW}[*]Stopping network visibility services...${RESET}"
 
 	# Checks for bettercap-arp-antidote.service
 	if [ -e /etc/systemd/system/bettercap-arp-antidote.service ]; then
@@ -1255,7 +1261,7 @@ function EnableRITACron() {
 	# https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md
 
 	echo ""
-	echo -e "${BLUE}[i]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the given database)${RESET}"
+	echo -e "${BLUE}[>]Schedule a cron task for a database? (RITA will import Zeek logs on an hourly basis to the given database)${RESET}"
 	until [[ $RITA_CRON_CHOICE =~ ^(y|n)$ ]]; do
 		read -rp "[y/n]? " RITA_CRON_CHOICE
 	done
@@ -1295,7 +1301,7 @@ function ManageRITACron() {
 
 	if [ -e /etc/cron.d/rita ]; then
 		echo ""
-		echo -e "${BLUE}[i]Delete /etc/cron.d/rita?${RESET}"
+		echo -e "${BLUE}[>]Delete /etc/cron.d/rita?${RESET}"
 		echo ""
 		until [[ $RITA_CRON_OPTION =~ ^(y|n)$ ]]; do
 			read -rp "Select an option [y/n]: " RITA_CRON_OPTION
@@ -1328,7 +1334,7 @@ function EnableZeekCron() {
 	# https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command
 
 	echo ""
-	echo -e "${BLUE}[i]Enable Zeek cron? (only for non-docker Zeek installations)${RESET}"
+	echo -e "${BLUE}[>]Enable Zeek cron? (only for non-docker Zeek installations)${RESET}"
 	echo -e "${BLUE}   This will check the Zeek process every 5 minutes, and restart it if it's crashed.${RESET}"
 	echo -e "${BLUE}   https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command${RESET}"
 	until [[ $ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
@@ -1353,7 +1359,7 @@ PATH=$ZEEK_PATH/bin:/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 		echo -e "${BLUE}[✓]New task scheduled under /etc/cron.d/zeek${RESET}"
 	elif [[ $ZEEK_CRON_CHOICE == "n" ]]; then
 
-		echo -e "${BLUE}[i]Remove Zeek cron?${RESET}"
+		echo -e "${BLUE}[>]Remove Zeek cron?${RESET}"
 		until [[ $REMOVE_ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
 			read -rp "[y/n]? " REMOVE_ZEEK_CRON_CHOICE
 		done
@@ -1372,7 +1378,7 @@ function ManageZeekCron() {
 
 	if [ -e /etc/cron.d/zeek ]; then
 		echo ""
-		echo -e "${BLUE}[i]Delete /etc/cron.d/zeek?${RESET}"
+		echo -e "${BLUE}[>]Delete /etc/cron.d/zeek?${RESET}"
 		echo ""
 		until [[ $ZEEK_CRON_OPTION =~ ^(y|n)$ ]]; do
 			read -rp "Select an option [y/n]: " ZEEK_CRON_OPTION
@@ -1471,7 +1477,7 @@ function UninstallBettercap() {
 function UninstallDocker() {
 
     if (command -v docker > /dev/null); then
-        echo -e "${BLUE}[i]Uninstalling docker...${RESET}"
+        echo -e "${BLUE}[*]Uninstalling docker...${RESET}"
         apt-get autoremove --purge docker-ce docker-ce-cli containerd.io
      fi
      echo -e "${BLUE}[✓]docker uninstalled.${RESET}"
@@ -1481,7 +1487,7 @@ function UninstallDocker() {
 function UninstallDockerCompose() {
 
     if (command -v docker-compose > /dev/null); then
-        echo -e "${BLUE}[i]Uninstalling docker-compose...${RESET}"
+        echo -e "${BLUE}[*]Uninstalling docker-compose...${RESET}"
         rm /usr/local/bin/docker-compose
     fi
     echo -e "${BLUE}[✓]docker-compose uninstalled.${RESET}"
@@ -1491,7 +1497,7 @@ function UninstallDockerCompose() {
 function UninstallMongoDBFromApt() {
 
     if (command -v mongod > /dev/null); then
-        echo -e "${BLUE}[i]Uninstalling mongodb...${RESET}"
+        echo -e "${BLUE}[*]Uninstalling mongodb...${RESET}"
         systemctl stop mongod
         apt-get autoremove --purge mongodb-org
     fi
@@ -1504,7 +1510,7 @@ function UninstallZeek() {
     if [ -e /opt/zeek/bin/zeekctl ]; then
         /opt/zeek/bin/zeekctl cron disable
         /opt/zeek/bin/zeekctl stop
-        echo -e "${BLUE}[i]Waiting 30s for zeek processes to stop...${RESET}"
+        echo -e "${BLUE}[*]Waiting 30s for zeek processes to stop...${RESET}"
         sleep 30
         apt-get autoremove --purge zeek
         rm -rf /opt/zeek/etc/*
@@ -1513,7 +1519,7 @@ function UninstallZeek() {
     if [ -e /usr/local/zeek/bin/zeekctl ]; then
         /usr/local/zeek/bin/zeekctl cron disable
         /usr/local/zeek/bin/zeekctl stop
-        echo -e "${BLUE}[i]Waiting 30s for zeek processes to stop...${RESET}"
+        echo -e "${BLUE}[*]Waiting 30s for zeek processes to stop...${RESET}"
         sleep 30
         apt-get autoremove --purge zeek
         rm -rf /usr/local/zeek/etc/*
@@ -1743,7 +1749,7 @@ function EchoStatus() {
 
 function InstallBettercap() {
 
-    echo -e "${BLUE}[i]Checking path for bettercap...${RESET}"
+    echo -e "${BLUE}[*]Checking path for bettercap...${RESET}"
     if ! (command -v bettercap > /dev/null); then
         CheckOS
         CheckInterface
@@ -1767,7 +1773,7 @@ function InstallZeek() {
         source /etc/profile.d/zeek-path.sh
     fi
 
-    echo -e "${BLUE}[i]Checking path for zeek...${RESET}"
+    echo -e "${BLUE}[*]Checking path for zeek...${RESET}"
 
     if (command -v zeek > /dev/null); then
     	echo -e "${BLUE}[i]Zeek found!${RESET}"
@@ -1808,7 +1814,7 @@ function InstallZeek() {
 
 function InstallRITA() {
 
-    echo -e "${BLUE}[i]Checking path for rita...${RESET}"
+    echo -e "${BLUE}[*]Checking path for rita...${RESET}"
     if ! (command -v rita > /dev/null || (command -v docker > /dev/null && (docker image list | grep -iq rita))); then
         CheckOS
         MakeTemp
