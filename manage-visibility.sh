@@ -3,7 +3,7 @@
 # MIT License
 
 # Setup bettercap and services for intercepting and inspecting traffic
-# Version=0.5 (Tested on 20.04.x Desktop)
+# Version=0.6 (Tested on 20.04.x Desktop)
 
 # shellcheck disable=SC2181
 # shellcheck disable=SC2166
@@ -1120,7 +1120,7 @@ After=network.target
 [Service]
 Type=simple
 PermissionsStartOnly=true
-ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on'
+ExecStart=/usr/local/bin/bettercap -eval 'net.recon on; net.probe on; arp.spoof on; ndp.spoof on'
 Restart=always
 RestartSec=30
 
@@ -1335,8 +1335,8 @@ function EnableZeekCron() {
 
 	echo ""
 	echo -e "${BLUE}[>]Enable Zeek cron? (only for non-docker Zeek installations)${RESET}"
-	echo -e "${BLUE}   This will check the Zeek process every 5 minutes, and restart it if it's crashed.${RESET}"
-	echo -e "${BLUE}   https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command${RESET}"
+	echo -e "   This will check the Zeek process every 5 minutes, and restart it if it's crashed."
+	echo -e "   https://github.com/zeek/zeekctl/blob/master/doc/main.rst#zeekcontrol-cron-command"
 	until [[ $ZEEK_CRON_CHOICE =~ ^(y|n)$ ]]; do
 		read -rp "[y/n]? " ZEEK_CRON_CHOICE
 	done
@@ -1564,7 +1564,7 @@ function UninstallRITA() {
 function Uninstallntopng() {
 
 	echo -e "${YELLOW}[i]NOTE: This function is not yet complete. Some components will remain installed.${RESET}"
-	apt autoremove --purge -y ntopng
+	apt autoremove --purge -y apt-ntop-stable pfring-dkms nprobe ntopng n2disk cento
 	echo -e "${YELLOW}[✓]ntopng uninstalled.${RESET}"
 
 }
@@ -1606,9 +1606,9 @@ function FirewallStatus() {
 	fi
 	if (command -v ip6tables > /dev/null); then
 		if (ip6tables -S | grep -q "\-P INPUT ACCEPT" && ip6tables -S | grep -q "\-P FORWARD ACCEPT" && ip6tables -S | grep -q "\-P OUTPUT ACCEPT"); then
-			echo -e "    ${BLUE}●${RESET} ip6tables chains set to ACCEPT."
+			echo -e "    ${BLUE}●${RESET} ip6tables chains set to ACCEPT"
 		else
-			echo -e "    ${YELLOW}●${RESET} ip6tables has active rules."
+			echo -e "    ${YELLOW}●${RESET} ip6tables has active rules"
 		fi
 	fi
 }
@@ -1922,6 +1922,13 @@ function Installntopng() {
 		apt-get install -y pfring-dkms nprobe ntopng n2disk cento
 
 		echo -e "${BLUE}[✓]Done.${RESET}"
+
+		echo -e "${YELLOW}[i]Recommended: Limit access to the ntopng admin panel.${RESET}"
+		echo -e "    Go to: Settings > Preferences > User Interface > Access Control List"
+		echo -e "    Set this value to: ${GREEN}+127.0.0.0/8${RESET}"
+		echo -e "    Then click the 👤 user icon on the top right of the WebUI and choose '↻ Restart'"
+
+		Sleep 3
 
 		CleanUp
 		EchoStatus

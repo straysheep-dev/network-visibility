@@ -15,6 +15,7 @@ This is a write up of the excellent [No SPAN Port? No Tap? No Problem!](https://
 
 A [setup script](https://github.com/straysheep-dev/network-visibility/blob/main/manage-visibility.sh) has been added to help automate the steps below, in an attempt to learn how each component works (both individually and with the others). The goal is to be able to spin up, or spin down, and configure all the services you may need from a single menu on whatever Ubuntu-based device you have available.
 
+
 ## Credits
 
 This project takes code, ideas, or guidance from the following sources:
@@ -36,8 +37,11 @@ The following documentation was heavily referenced to get everything working:
 - [MongoDB Install Guide](https://docs.mongodb.com/v4.2/installation/)
 - [golang Install Guide](https://go.dev/doc/install)
 - [0ptsecdemo](https://github.com/0ptsec/optsecdemo)
+- [ntopng Docs](https://www.ntop.org/guides/ntopng/)
+
 
 ## Contents
+- [Summary](#summary)
 - [Install Ubuntu 18.04 or 20.04](#install-ubuntu-1804-or-2004-choose-desktop-or-server)
 - [Install RITA / MongoDB / ZEEK](#install-rita--mongodb--zeek)
     * [Ubuntu 18.04 or 20.04 x86_64](#ubuntu-1804-or-2004-x86_64)
@@ -50,6 +54,30 @@ The following documentation was heavily referenced to get everything working:
 - [Putting It All Together](#putting-it-all-together)
 - [Automated Setup](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
 - [Configure RITA](#configure-rita)
+- [Install ntopng](#ntopng)
+- [What Next?](#what-next)
+
+
+## Summary
+
+What you need to do this quickly and effectively:
+
+- Install Ubuntu 20.04.x, either desktop or server works fine
+- Run the latest RITA installer, this gives you RITA, Zeek, and MongoDB ready on your system
+- Remove all of your firewall rules, meaning disable`ufw` and set all `iptables`/`ip6tables` chains to ACCEPT
+- Install the following essential packages:
+	- `sudo apt install -y ca-certificates curl git gnupg lsb-release libpcap0.8 libusb-1.0-0 libnetfilter-queue1 unzip wget`
+- Download bettercap from its GitHub release page, and run it with:
+	- `sudo bettercap -eval 'net.recon on; net.probe on; arp.spoof on; ndp.spoof on'`
+	- Bettercap already enables packet forwarding on your system while it's running
+
+How to resolve common issues:
+
+- If you just disabled your firewall rules and are having issues intercepting traffic, reboot your system
+- If the local gateway has arp spoofing protections in place, using `set arp.spoof.fullduplex true` will break arp spoofing
+- If Zeek crashes, run `sudo /path/to/zeekctl restart`
+- If you change network interfaces you'll need to [reconfigure Zeek](https://raw.githubusercontent.com/activecm/bro-install/master/gen-node-cfg.sh) and reboot your system
+
 
 ## Install Ubuntu 18.04 or 20.04 (choose desktop or server)
 
@@ -647,6 +675,12 @@ Arp spoofing examples taken from: <https://www.bettercap.org/modules/ethernet/sp
 >> arp.spoof off
 ```
 
+If you're on an IPv6 network you'll need to use `ndp.spoof`, which is the IPv6 `arp.spoof` equivalent:
+
+```bettercap
+>> ndp.spoof on
+```
+
 ## Putting It All Together:
 
 *It may take a few minutes before you can "see" intercepted traffic on your analysis machine.*
@@ -658,8 +692,8 @@ sudo bettercap -caplet http-ui
 >> net.recon on
 >> net.probe on
 >> arp.spoof on
->> arp.spoof.fullduplex true
-# you're done! leave these running continuously to capture traffic
+>> ndp.spoof on
+# you're done! leave these running continuously to capture outbound traffic from the local network
 ```
 
 *If you have another locally networked device, check its arp cache. The MAC address for the gateway and the box running bettercap should be the same value after a few minutes.*
@@ -680,6 +714,9 @@ sudo tcpdump -i eth0 -n -vv not port <ssh-port> and not port 139
 sudo tcpdump -i enp0s3 -n -vv port 53
 # you should see dns replies of domains being visited
 ```
+
+You could also use Wireshark. A useful filter for this is `!(ip.src == <bettercap-machine-ip>)&&!arp&&!mdns&&!icmpv6&&!nbns&&!ssdp`
+
 
 ## Configure RITA
 
@@ -705,6 +742,31 @@ rita show-beacons --help
 rita <command> -H <dataset_name> | less -S
 rita show-exploded-dns -H dataset_1 | less -S
 ```
+
+
+## ntopng
+
+[ntopng](https://github.com/ntop/ntopng) has been mentioned numerous times in other trainings and webcasts. After seeing how it works, it's a great option to visualize and monitor what's happening between all of these tools.
+
+[Install ntopng](https://packages.ntop.org/apt-stable/):
+
+```bash
+apt update
+apt-get install -y software-properties-common wget
+add-apt-repository universe
+wget https://packages.ntop.org/apt-stable/20.04/all/apt-ntop-stable.deb
+apt install ./apt-ntop-stable.deb
+apt-get clean all
+apt-get update
+apt-get install -y pfring-dkms nprobe ntopng n2disk cento
+```
+
+Limit access to the admin panel:
+
+- Go to: Settings > Preferences > User Interface > Access Control List
+- Set this value to `+127.0.0.0/8`
+- Then click the 👤 user icon on the top right of the WebUI and choose '↻ Restart'
+
 
 ## What Next?
 
@@ -737,5 +799,7 @@ rita import --rolling /opt/zeek/logs/current db_name
 Doing this, rita will not overwrite, create duplicates of, or erase, any log data previously imported into the data set with `--rolling`. So you can update the database live if you need to.
 
 You could also configure bettercap commands to [spin up as a service on start](https://github.com/straysheep-dev/network-visibility/blob/main/setup-antidote.sh)
+
+Install [AC Hunter Community Edition](https://www.activecountermeasures.com/ac-hunter-community-edition/).
 
 Most importantly: Happy hunting!
