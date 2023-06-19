@@ -496,11 +496,28 @@ NOTE: If you planned to port forward via ssh to access the web-ui on a server in
 
 ## Arp Poisoning (Antidoting?) the Network
 
-Ensure forwarding is enabled
+*Bettercap automatically enables packet forwarding in the kernel while it's running.* Even though it does this, you'll avoid any capturing issues by disabling any firewall rules. All of the listening tools installed need to accept traffic from the network to function. Anything else, like the mongodb instance RITA uses or the ntopng admin panel either run on localhost only, or can be easily configured to bind only to localhost.
 
-Option 2 examples adapted from here: <https://github.com/angristan/wireguard-install>
+Aside from that, Ubuntu typically has two network services running by default you may want to turn off:
+
 ```bash
-# Option 1. if using ufw
+# avahi
+sudo systemctl stop avahi-daemon
+sudo systemctl disable avahi-daemon
+
+# cups
+sudo systemctl stop cups
+sudo systemctl disable cups
+sudo systemctl stop cups-browsed
+sudo systemctl disable cups-browsed
+```
+
+If you need or want specific firewall rules on your analyst machine, this section details 3 ways to ensure forwarding is enabled manually.
+
+### Option 1
+
+```bash
+# If using ufw
 # replace eth0 with your interface name
 sudo ufw route allow in on eth0 out on eth0
 # setup ip forwarding, uncomment the following lines in /etc/ufw/sysctl.conf:
@@ -513,8 +530,14 @@ sudo ufw default allow routed
 sudo ufw disable
 sudo ufw enable
 sudo ufw status verbose | grep 'allow (routed)'
+```
 
-# Option 2. if not using ufw, and you want to create persistent systemctl rules:
+### Option 2
+
+Adapted from here: <https://github.com/angristan/wireguard-install>
+
+```bash
+# If not using ufw, and you want to create persistent systemctl rules:
 sudo su
 echo 'net.ipv4.ip_forward=1' >/etc/sysctl.d/20-bettercap.conf
 echo 'net.ipv6.conf.all.forwarding=1' >>/etc/sysctl.d/20-bettercap.conf
@@ -562,8 +585,12 @@ sudo rm /etc/iptables/enable-forwarding.sh
 sudo rm /etc/iptables/disable-forwading.sh
 sudo sysctl --system
 sudo systemctl daemon-reload
+```
 
-# Option 3. to temporarily and simply enable forwarding (until next reboot):
+### Option 3
+
+```bash
+# To temporarily and simply enable forwarding (until next reboot):
 sudo nano /proc/sys/net/ipv4/ip_forward
 # change 0 to 1
 sudo nano /proc/sys/net/ipv6/conf/all/forwarding
