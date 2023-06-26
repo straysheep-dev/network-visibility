@@ -41,19 +41,16 @@ PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)"
 
 ZEEK_VER="${zeek_ver:-5.1.1}"                                                          # Replace this variable when latest release is available: https://github.com/zeek/zeek/releases/
 ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'                                    # Replace this variable when a new key is available: https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
-ZEEK_DOCKER_HASH='e4818fb390a74f645338e1571afd0dd92628377a74fef67de309633777fcc470'    # Replace variable when latest release is available: https://github.com/activecm/docker-zeek/blob/master/zeek
+ZEEK_DOCKER_HASH='ebb0949dc6df908fecb9997f5ddcca70be3b2ed18c9af47076742d641eaa9fc2'    # Replace variable when latest release is available: https://github.com/activecm/docker-zeek/blob/master/zeek
 ZEEK_GEN_CFG_HASH='1b13b9cb0ee1bc7662ad9c2551181e012d07d83848727f9277c64086d9ec330e'   # This value should never change
 ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b6721'  # This value should never change
 
-RITA_VER="${rita_ver:-4.7.0}"                                                          # Replace variable when latest release is available: https://github.com/activecm/rita/releases
-RITA_HASH='0ba76eeedc6e4da73f7062cd11fc5ae04f9d0c739995efbcdcb17ca6b99031d8'           # Replace variable when latest release is available
+RITA_VER="${rita_ver:-4.8.0}"                                                          # Replace variable when latest release is available: https://github.com/activecm/rita/releases
+RITA_HASH='aa4b8b0c4076f4a9c3ff519eed2467cde9ae79abe05b6e97c1a8f55f979dc3f7'           # Replace variable when latest release is available: install.sh
 RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'      # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
 RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe'   # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/docker-compose.yml
 
-DOCKER_COMPOSE_VER="${docker_compose_ver:-2.14.0}"                                     # Replace this variable when latest binary release is available: https://github.com/docker/compose/releases
-DOCKER_COMPOSE_HASH=''                                                                 # Leave blank
-
-GO_VER="${go_ver:-1.19.3}"                                                             # Replace this variable when latest binary release is available: https://go.dev/doc/install
+GO_VER="${go_ver:-1.20.5}"                                                             # Replace this variable when latest binary release is available: https://go.dev/doc/install
 GO_BIN=''                                                                              # Leave blank
 GO_HASH=''                                                                             # Leave blank
 
@@ -69,16 +66,14 @@ if (dpkg --print-architecture | grep -qx 'amd64'); then
     ARCH='amd64'
     BETTERCAP_BIN="bettercap_linux_amd64_v$BETTERCAP_VER"
     BETTERCAP_HASH='74e85473d8cbeaa79b3c636032cbd0967387c4e9f95e253b4ae105eccd208a4f'
-    DOCKER_COMPOSE_HASH='fdf634ab2b01aca33372bef2bf866699ef2e1f2dab19972e37967b1fc2a11402'
     GO_BIN="go$GO_VER.linux-amd64.tar.gz"
-    GO_HASH='74b9640724fd4e6bb0ed2a1bc44ae813a03f1e72a4c76253e2d5c015494430ba'
+    GO_HASH='d7ec48cde0d3d2be2c69203bc3e0a44de8660b9c09a6e85c4732a3f7dc442612'                # Use the amd64 binary
 elif (dpkg --print-architecture | grep -qx 'arm64'); then
     ARCH='arm64'
     BETTERCAP_BIN="bettercap_linux_aarch64_v$BETTERCAP_VER"
     BETTERCAP_HASH='a278b191f7d36419d390dfca4af651daf1e9f1c7900ec1b3f627ab6c2f7b57e2'
-    DOCKER_COMPOSE_HASH='0265f45b30f4f0e1d53c1968c590181f64c546129d967460de382c6de38af191'
     GO_BIN="go$GO_VER.linux-arm64.tar.gz"
-    GO_HASH='99de2fe112a52ab748fb175edea64b313a0c8d51d6157dba683a6be163fd5eab'
+    GO_HASH='aa2fab0a7da20213ff975fa7876a66d47b48351558d98851b87d1cfef4360d09'                # Use the arm64 binary
 else
     echo "${BOLD}[i]Currently supported architectures: x86_64 (amd64), aarch64 (arm64)${RESET}" && exit 1
 fi
@@ -221,45 +216,6 @@ function InstallDocker() {
         exit 1
     fi
 
-}
-
-function InstallDockerCompose() {
-
-    if ! (command -v docker-compose > /dev/null); then
-        echo -e "${BLUE}[>]Installing Docker-Compose from GitHub...${RESET}"
-
-        curl -fsSLO "https://github.com/docker/compose/releases/download/v$DOCKER_COMPOSE_VER/docker-compose-linux-$(uname -m).sha256" && \
-        curl -fsSLO "https://github.com/docker/compose/releases/download/v$DOCKER_COMPOSE_VER/docker-compose-linux-$(uname -m)"
-        # Can't rename the binary based on $(uname -s) because l becomes L and isn't parsed by $(sha256sum -c ...) correctly.
-
-        echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
-        # Check against known hash
-        if ! (grep "$DOCKER_COMPOSE_HASH" "$SETUPDIR/docker-compose-linux-$(uname -m).sha256"); then
-            echo "${RED}[i]Bad checksum, quitting...${RESET}"
-            exit 1
-        fi
-        # Check against downloaded hash
-        if ! (sha256sum -c "$SETUPDIR/docker-compose-linux-$(uname -m).sha256"); then
-            echo "${RED}[i]Bad checksum, quitting...${RESET}"
-            exit 1
-        fi
-        # If 'Docker-Compose OK' add it to your path, otherwise exit, leaving the binary behind in $SETUPDIR to examine.
-
-        sleep 2
-
-        mv "$SETUPDIR/docker-compose-linux-$(uname -m)" /usr/local/bin/docker-compose
-        chown root:root /usr/local/bin/docker-compose
-        chmod 755 /usr/local/bin/docker-compose
-    fi
-
-    if (command -v docker-compose > /dev/null); then
-        echo -e "${BLUE}[*]Getting docker-compose version information...${RESET}"
-        docker-compose --version
-        echo -e "${BLUE}[✓]docker-compose installed.${RESET}"
-    else
-        echo "No version detected, quitting..."
-        exit 1
-    fi
 }
 
 function InstallMongoDBFromApt() {
@@ -829,7 +785,7 @@ function InstallRITAFromDocker() {
 
         docker pull quay.io/activecm/rita
         
-        # Make a working directory for the configuration as well as docker-compose files
+        # Make a working directory for the configuration as well as docker compose files
         mkdir /etc/rita
 
         echo "CONFIG=/etc/rita/config.yaml
@@ -866,14 +822,14 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
     fi
 
     # This needs to run twice initially with Docker for some reason
-    if ! (docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
-        if ! (docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
+    if ! (docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
+        if ! (docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version); then
             echo -e "[${YELLOW}i${RESET}]Cannot obtain rita --verison information..."
             echo -e ""
             echo -e "${BOLD}TEST RITA WITH THE FOLLOWING:${RESET}"
             echo -e ""
-            echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
-            echo -e "${YELLOW}sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
+            echo -e "${YELLOW}sudo docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
+            echo -e "${YELLOW}sudo docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita test-config${RESET}"
         fi
     fi
 
@@ -884,12 +840,12 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
     echo -e "Import a directory of *.gz or *.log Zeek log files to databse db_1:"
     echo -e "${YELLOW}sudo su${RESET}"
     echo -e "${YELLOW}export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
-    echo -e "${YELLOW}docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
+    echo -e "${YELLOW}docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
     echo -e ""
     echo -e "Import multiple diretories of *.gz or *.log Zeek log files to database db_1:"
     echo -e "For example, if all of the log folders are named 'fedora-YYYYmmdd-HHMMSS', use 'for logs in /path/to/logs/fedora-*'"
     echo -e "${YELLOW}sudo su${RESET}"
-    echo -e "${YELLOW}for logs in /path/to/logs/folder*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+    echo -e "${YELLOW}for logs in /path/to/logs/folder*; do export LOGS=\"\$logs\"; docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
     sleep 5
 }
 
@@ -1484,16 +1440,6 @@ function UninstallDocker() {
 
 }
 
-function UninstallDockerCompose() {
-
-    if (command -v docker-compose > /dev/null); then
-        echo -e "${BLUE}[*]Uninstalling docker-compose...${RESET}"
-        rm /usr/local/bin/docker-compose
-    fi
-    echo -e "${BLUE}[✓]docker-compose uninstalled.${RESET}"
-
-}
-
 function UninstallMongoDBFromApt() {
 
     if (command -v mongod > /dev/null); then
@@ -1544,7 +1490,7 @@ function UninstallRITA() {
     if (command -v docker > /dev/null); then
         if (docker image list | grep -iq rita); then
             cd /etc/rita || exit 1
-            docker-compose -f ./docker-compose.yml --env-file ./rita.env down
+            docker compose -f ./docker-compose.yml --env-file ./rita.env down
             docker rmi quay.io/activecm/rita:latest
             docker rmi quay.io/activecm/rita:v"$RITA_VER"
             docker rmi mongo:4.2
@@ -1807,12 +1753,11 @@ function InstallZeek() {
         MakeTemp
         InstallEssentialPackages
 
+# Add a prompt here to install zeek via docker if that's preferred
+
         # Check available Zeek binaries at:
         # https://build.opensuse.org/project/show/security:zeek
-        if  [[ $MAJOR_UBUNTU_VERSION -eq 20 ]]; then
-            InstallZeekFromApt
-            ConfigureZeek
-        elif [ "$ARCH" == 'amd64' ]; then
+        if [ "$ARCH" == 'amd64' ]; then
             InstallZeekFromApt
             ConfigureZeek
         elif [ "$ARCH" == 'arm64' ]; then
@@ -1840,6 +1785,8 @@ function InstallRITA() {
         MakeTemp
         InstallEssentialPackages
 
+# Add a prompt here to install rita via docker if that's preferred
+
         # Check OS arch
         if [[ $MAJOR_UBUNTU_VERSION -eq 18 ]] || [[ $MAJOR_UBUNTU_VERSION -eq 20 ]]; then
             if [ "$ARCH" == 'amd64' ]; then
@@ -1854,7 +1801,6 @@ function InstallRITA() {
             fi
         elif  [[ $MAJOR_UBUNTU_VERSION -ne 18 ]] || [[ $MAJOR_UBUNTU_VERSION -ne 20 ]]; then
                 InstallDocker
-                InstallDockerCompose
                 InstallRITAFromDocker
         else
             echo -e "${BOLD}[i]Architecture not yes tested, quitting.${RESET}"
@@ -1867,10 +1813,10 @@ function InstallRITA() {
         echo -e "${BLUE}[i]RITA already installed.${RESET}"
         echo -e ""
         echo -e "${BLUE}[i]Test with:${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs database_name_1${RESET}"
+        echo -e "${BOLD}   sudo docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita --version${RESET}"
+        echo -e "${BOLD}   sudo docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs database_name_1${RESET}"
         echo -e "${BLUE}[i]Also be sure to try '-H | less -S' to view data manually.${RESET}"
-        echo -e "${BOLD}   sudo docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita show-exploded-dns db_1 -H | less -S${RESET}"
+        echo -e "${BOLD}   sudo docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita show-exploded-dns db_1 -H | less -S${RESET}"
         echo -e "${YELLOW}   If the output is messed up, try all four arrow keys inside of 'less' to arrange it properly.${RESET}"
         echo -e ""
         echo -e "Import a directory of *.gz Zeek log files to databse db_1:"
@@ -1879,14 +1825,14 @@ function InstallRITA() {
 	echo -e "${YELLOW}   rita import /path/to/logs/YYYY-MM-DD db_1${RESET}"
         echo -e "# Docker:"
         echo -e "${YELLOW}   export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
-        echo -e "${YELLOW}   docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
+        echo -e "${YELLOW}   docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
         echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
         echo -e "${YELLOW}   sudo su${RESET}"
 	echo -e "# Script Install:"
 	echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do rita import --rolling \"\$logs\" db_1; done${RESET}"
         echo -e "# Docker:"
-        echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker-compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+        echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
         echo -e ""
     else
         echo -e "${BLUE}[i]RITA already installed.${RESET}"
@@ -2004,15 +1950,6 @@ function Uninstall() {
 
     if [[ $REMOVE_DOCKER == "y" ]]; then
         UninstallDocker
-    fi
-
-    echo -e "${BLUE}[>]Uninstall Docker-Compose?${RESET}"
-    until [[ $REMOVE_COMPOSE =~ ^(y|n)$ ]]; do
-        read -rp "[y/n]? " REMOVE_COMPOSE
-    done
-
-    if [[ $REMOVE_COMPOSE == "y" ]]; then
-        UninstallDockerCompose
     fi
 
 }
