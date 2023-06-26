@@ -47,7 +47,7 @@ ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b
 
 RITA_VER="${rita_ver:-4.8.0}"                                                          # Replace variable when latest release is available: https://github.com/activecm/rita/releases
 RITA_HASH='aa4b8b0c4076f4a9c3ff519eed2467cde9ae79abe05b6e97c1a8f55f979dc3f7'           # Replace variable when latest release is available: install.sh
-RITA_CONF_HASH='d774c5d67dbc3c376abe93828f863b726eca486fc32700c1912608381e117047'      # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
+RITA_CONF_HASH='f2b06436a581977608b514f7caa68ecc431465bb0d935fa2a05ac1e0d139effe'      # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/etc/rita.yaml
 RITA_COMPOSE_HASH='82abd8565ba0aa7022e1d4d2cb17c6e63172e2bca78c4518a3967760f921ebfe'   # Replace variable when latest release is available: https://github.com/activecm/rita/blob/master/docker-compose.yml
 
 GO_VER="${go_ver:-1.20.5}"                                                             # Replace this variable when latest binary release is available: https://go.dev/doc/install
@@ -437,17 +437,20 @@ function InstallZeekFromSource() {
 
 function InstallZeekFromDocker() {
 
-    echo -e "${BLUE}[>]${RESET}Installing docker-zeek using the activecm management script..."
+    echo -e "${BLUE}[>]Installing docker-zeek using the activecm management script...${RESET}"
 
     ZEEK_PATH="${zeek_path:-/opt/zeek/}"
 
-    curl -Lf 'https://raw.githubusercontent.com/activecm/docker-zeek/master/zeek' > zeek
-    echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
-    if ! (sha256sum "$SETUPDIR/zeek" | grep -x  "$ZEEK_DOCKER_HASH  $SETUPDIR/zeek"); then
-        echo -e "${RED}[i]Bad checksum. Quitting.${RESET}"
-        exit 1
-    else
-        echo -e "${GREEN}OK${RESET}"
+    # Download the management script and move it to /usr/local/bin/zeek
+    if ! [ -e /usr/local/bin/zeek ]; then
+        curl -Lf 'https://raw.githubusercontent.com/activecm/docker-zeek/master/zeek' > zeek
+        echo -e "${BLUE}[*]Checking sha256sum...${RESET}"
+        if ! (sha256sum "$SETUPDIR/zeek" | grep -x  "$ZEEK_DOCKER_HASH  $SETUPDIR/zeek"); then
+            echo -e "${RED}[i]Bad checksum. Quitting.${RESET}"
+            exit 1
+        else
+            echo -e "${GREEN}OK${RESET}"
+        fi
     fi
     for installer in "$SETUPDIR"/zeek; do
         chown root:root "$installer"
@@ -457,11 +460,14 @@ function InstallZeekFromDocker() {
         mkdir -p /opt/zeek/etc
     done
 
+    # Pull the docker image
+    docker pull "activecm/zeek:${zeek_release:-4.2.0}"
+
 }
 
 function AddZeekToPath() {
     # APT
-    if [ "$ARCH" == 'amd64' ]; then
+    if [ -e "$ZEEK_PATH"/bin/zeek ] && ! (grep -q 'zeek' '/etc/profile.d/zeek-path.sh'); then
         # Add Zeek to PATH
         {
         echo ""
@@ -473,7 +479,7 @@ function AddZeekToPath() {
     fi
     # DOCKER
     # https://github.com/activecm/docker-zeek#zeek-version
-    if [ "$ARCH" == 'arm64' ]; then
+    if [ -e '/usr/local/bin/zeek' ]; then
         echo "export zeek_release=latest" | tee /etc/profile.d/zeek.sh
         source /etc/profile.d/zeek.sh
     fi
@@ -529,7 +535,7 @@ function ConfigureNode() {
 
 function InstallZkgPackages() {
     # APT
-    if [ "$ARCH" == 'amd64' ]; then
+    if [[ -e "$ZEEK_PATH"/bin/zeek ]]; then
         # Edit $ZEEK_PATH/site/local.zeek file so that it contains the following line
         if ! (grep -qx "^@load packages$" "$ZEEK_PATH"/share/zeek/site/local.zeek); then
             sed -i 's/^.*@load packages.*$/@load packages/' "$ZEEK_PATH"/share/zeek/site/local.zeek
@@ -542,9 +548,8 @@ function InstallZkgPackages() {
             echo -e "${BLUE}[*]Installing zeek-open-connections...${RESET}"
             "$ZEEK_PATH"/bin/zkg install zeek/activecm/zeek-open-connections
         fi
-     fi
     #DOCKER
-    if [ "$ARCH" == 'arm64' ]; then
+    elif [[ -e '/usr/local/bin/zeek' ]]; then
         # To install the plugin for open or long-running connections:
         # https://github.com/activecm/docker-zeek#install-a-plugin
         if ! (docker exec -it zeek zkg list installed | grep -q 'zeek/activecm/zeek-open-connections'); then
@@ -558,7 +563,7 @@ function InstallZkgPackages() {
 
 function StartZeek() {
     # APT
-    if [ "$ARCH" == 'amd64' ]; then
+    if [[ -e "$ZEEK_PATH"/bin/zeek ]]; then
         # Check the configuration
         "$ZEEK_PATH"/bin/zeekctl check
         # Deploy the configuration
@@ -574,9 +579,8 @@ function StartZeek() {
             echo -e "${RED}[i]Error getting Zeek status, quitting...${RESET}"
             exit 1
         fi
-    fi
     # DOCKER
-    if [ "$ARCH" == 'arm64' ]; then
+    elif [[ -e '/usr/local/bin/zeek' ]]; then
         sleep 2
         /usr/local/bin/zeek start
         sleep 2
@@ -610,15 +614,20 @@ function ConfigureZeek() {
 
 	InstallZkgPackages
 
-	if ! ("$ZEEK_PATH"/bin/zeekctl status > /dev/null); then
-		until [[ $START_ZEEK_CHOICE =~ ^(y|n)$ ]]; do
-			read -rp "Start Zeek now? [y/n]: " -e START_ZEEK_CHOICE
-		done
-		if [[ "$START_ZEEK_CHOICE" == "y" ]]; then
-			StartZeek
-		fi
-	else
-		echo -e "${BLUE}[i]Zeek already running.${RESET}"
+	echo -e "[*]Getting Zeek status..."
+
+	if [[ -e "$ZEEK_PATH"/bin/zeek ]]; then
+		"$ZEEK_PATH"/bin/zeekctl status
+	# DOCKER
+	elif [[ -e '/usr/local/bin/zeek' ]]; then
+		/usr/local/bin/zeek status
+	fi
+
+	until [[ $START_ZEEK_CHOICE =~ ^(y|n)$ ]]; do
+		read -rp "Restart Zeek now? [y/n]: " -e START_ZEEK_CHOICE
+	done
+	if [[ "$START_ZEEK_CHOICE" == "y" ]]; then
+		StartZeek
 	fi
 }
 
@@ -815,7 +824,8 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
         echo -e "${BOLD}See: https://github.com/activecm/rita/blob/master/docs/Rolling%20Datasets.md for more details${RESET}"
         echo -e ""
         sleep 2
-
+    fi
+    if ! [[ -e '/etc/rita/config.yaml' && -e '/etc/rita/docker-compose.yml' ]]; then
         curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/etc/rita.yaml' > /etc/rita/config.yaml
         curl -fsSL 'https://raw.githubusercontent.com/activecm/rita/master/docker-compose.yml' > /etc/rita/docker-compose.yml
         
@@ -1022,6 +1032,7 @@ function RemoveFirewallRules() {
 	echo -e "${BLUE}[i] This script can remove all firewall rules for compatability.${RESET}"
 	echo -e "    You can skip this if you have rules configured in a specific way you want to keep."
 	echo -e "    Otherwise, it's recommended to do this to ensure all network traffic passes through."
+	echo -e "    If docker is installed, it will be restarted to ensure the necessary rules are loaded."
 	echo ""
 	until [[ $REMOVE_FW_CHOICE =~ ^(y|n)$ ]]; do
 		read -rp "Remove all firewall rules? [y/n]: " -e REMOVE_FW_CHOICE
@@ -1040,6 +1051,9 @@ function RemoveFirewallRules() {
 			echo -e "${BLUE}[>]Removing all ip6tables rules...${RESET}"
 			ip6tables -F    # Flush all chains
 			ip6tables -X    # Delete all user-defined chains
+		fi
+		if (command -v docker >/dev/null); then
+			systemctl restart docker
 		fi
 	fi
 
@@ -1798,20 +1812,20 @@ function InstallZeek() {
         MakeTemp
         InstallEssentialPackages
 
-# Add a prompt here to install zeek via docker if that's preferred
+        echo -e "${BLUE}[>]Prefer using Docker for this?${RESET}"
+        until [[ $DOCKER_PREF_ZEEK =~ ^(y|n)$ ]]; do
+            read -rp "[y/n]? " DOCKER_PREF_ZEEK
+        done
 
         # Check available Zeek binaries at:
         # https://build.opensuse.org/project/show/security:zeek
-        if [ "$ARCH" == 'amd64' ]; then
+        if [ "$DOCKER_PREF_ZEEK" == 'n' ] && [ "$ARCH" == 'amd64' ]; then
             InstallZeekFromApt
             ConfigureZeek
-        elif [ "$ARCH" == 'arm64' ]; then
+        else
             InstallDocker
             InstallZeekFromDocker
             ConfigureZeek
-        else
-            echo -e "${BOLD}[i]Architecture not yet tested, quitting.${RESET}"
-            exit 1
         fi
 
         CleanUp
@@ -1825,15 +1839,18 @@ function InstallZeek() {
 function InstallRITA() {
 
     echo -e "${BLUE}[*]Checking path for rita...${RESET}"
-    if ! (command -v rita > /dev/null || (command -v docker > /dev/null && (docker image list | grep -iq rita))); then
+    if ! (command -v rita > /dev/null || (command -v docker > /dev/null && (docker image list | grep -iq rita) && [[ -e '/etc/rita/config.yaml' && -e '/etc/rita/docker-compose.yml' ]])); then
         CheckOS
         MakeTemp
         InstallEssentialPackages
 
-# Add a prompt here to install rita via docker if that's preferred
+        echo -e "${BLUE}[>]Prefer using Docker for this?${RESET}"
+        until [[ $DOCKER_PREF_RITA =~ ^(y|n)$ ]]; do
+            read -rp "[y/n]? " DOCKER_PREF_RITA
+        done
 
         # Check OS arch
-        if [[ $MAJOR_UBUNTU_VERSION -eq 18 ]] || [[ $MAJOR_UBUNTU_VERSION -eq 20 ]]; then
+        if [[ $DOCKER_PREF_RITA == 'n' ]] && [[ $MAJOR_UBUNTU_VERSION -eq 18 || $MAJOR_UBUNTU_VERSION -eq 20 ]]; then
             if [ "$ARCH" == 'amd64' ]; then
                 InstallRITAFromScript
             elif  [ "$ARCH" == 'arm64' ]; then
@@ -1844,12 +1861,9 @@ function InstallRITA() {
                 echo -e "${BOLD}[i]Architecture not yes tested, quitting.${RESET}"
                 exit 1
             fi
-        elif  [[ $MAJOR_UBUNTU_VERSION -ne 18 ]] || [[ $MAJOR_UBUNTU_VERSION -ne 20 ]]; then
+        else
                 InstallDocker
                 InstallRITAFromDocker
-        else
-            echo -e "${BOLD}[i]Architecture not yes tested, quitting.${RESET}"
-            exit 1
         fi
 
         CleanUp
@@ -1865,19 +1879,13 @@ function InstallRITA() {
         echo -e "${YELLOW}   If the output is messed up, try all four arrow keys inside of 'less' to arrange it properly.${RESET}"
         echo -e ""
         echo -e "Import a directory of *.gz Zeek log files to databse db_1:"
-        echo -e "${YELLOW}   sudo su${RESET}"
-	echo -e "# Script Install:"
-	echo -e "${YELLOW}   rita import /path/to/logs/YYYY-MM-DD db_1${RESET}"
-        echo -e "# Docker:"
-        echo -e "${YELLOW}   export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
-        echo -e "${YELLOW}   docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
+        echo -e "${BOLD}    sudo su${RESET}"
+        echo -e "${BOLD}    export LOGS=/path/to/logs/YYYY-MM-DD${RESET}"
+        echo -e "${BOLD}    docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import /logs db_1${RESET}"
         echo -e ""
         echo -e "Import multiple diretories of YYYY-MM-DD/*.gz or *.log Zeek log files to database db_1:"
-        echo -e "${YELLOW}   sudo su${RESET}"
-	echo -e "# Script Install:"
-	echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do rita import --rolling \"\$logs\" db_1; done${RESET}"
-        echo -e "# Docker:"
-        echo -e "${YELLOW}   for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
+        echo -e "${BOLD}    sudo su${RESET}"
+        echo -e "${BOLD}    for logs in /path/to/logs/YYYY-*; do export LOGS=\"\$logs\"; docker compose -f /etc/rita/docker-compose.yml --env-file /etc/rita/rita.env run --rm rita import --rolling /logs db_1; done${RESET}"
         echo -e ""
     else
         echo -e "${BLUE}[i]RITA already installed.${RESET}"
@@ -1961,7 +1969,7 @@ function Uninstall() {
         Uninstallntopng
     fi
 
-    echo -e "${BLUE}[>]Uninstall Zeek?${RESET}"
+    echo -e "${BLUE}[>]Uninstall Zeek? (Removes any cron tasks)${RESET}"
     until [[ $REMOVE_ZEEK =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_ZEEK
     done
@@ -1970,7 +1978,7 @@ function Uninstall() {
         UninstallZeek
     fi
 
-    echo -e "${BLUE}[>]Uninstall RITA?${RESET}"
+    echo -e "${BLUE}[>]Uninstall RITA? (Removes any cron tasks)${RESET}"
     until [[ $REMOVE_RITA =~ ^(y|n)$ ]]; do
         read -rp "[y/n]? " REMOVE_RITA
     done
@@ -2021,7 +2029,7 @@ function ManageMenu() {
     echo -e "  10) Update Bettercap caplets"
     echo -e "  11) Uninstall network visibility services and optionally any installed packages"
     echo -e "   0) Exit"
-    until [[ $MENU_OPTION =~ ^([0-9]|10)$ ]]; do
+    until [[ $MENU_OPTION =~ ^(1?[0-9])$ ]]; do
         read -rp "Select an option [1-11]: " MENU_OPTION
     done
 
