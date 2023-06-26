@@ -39,8 +39,8 @@ RESET="\033[00m"     # reset
 
 PUB_NIC="$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)' | head -1)" # Public Network Interface Card
 
-ZEEK_VER="${zeek_ver:-5.1.1}"                                                          # Replace this variable when latest release is available: https://github.com/zeek/zeek/releases/
-ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'                                    # Replace this variable when a new key is available: https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
+ZEEK_VER="${zeek_ver:-5.2.2}"                                                          # Replace this variable when latest release is available: https://github.com/zeek/zeek/releases/
+ZEEK_GPG='E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E'                                    # Replace this variable when a new key is available: https://github.com/zeek/zeek-docs/blob/master/install.rst#binary-packages, https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
 ZEEK_DOCKER_HASH='ebb0949dc6df908fecb9997f5ddcca70be3b2ed18c9af47076742d641eaa9fc2'    # Replace variable when latest release is available: https://github.com/activecm/docker-zeek/blob/master/zeek
 ZEEK_GEN_CFG_HASH='1b13b9cb0ee1bc7662ad9c2551181e012d07d83848727f9277c64086d9ec330e'   # This value should never change
 ZEEK_NODE_CFG_HASH='73fb4894fba81d5a52c9cb8160e0b73c116c311648ecc6dda7921bdd2b7b6721'  # This value should never change
@@ -168,6 +168,10 @@ function InstallEssentialPackages() {
 
 function InstallDocker() {
 
+    # For changes, check the following link:
+    # https://docs.docker.com/engine/install/
+    # https://docs.docker.com/engine/install/ubuntu/
+
     echo -e "${BLUE}[>]Installing Docker from download.docker.com...${RESET}"
 
     if ! [ -e /etc/apt/keyrings/docker.gpg ]; then
@@ -176,9 +180,12 @@ function InstallDocker() {
 
         curl -fsSL 'https://download.docker.com/linux/ubuntu/gpg' > "$SETUPDIR"/docker-archive-keyring.gpg
 
+        # We're only using apt-key to read the key fingerprint, nothing else
         apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR"/docker-archive-keyring.gpg 2>/dev/null| grep -P "9DC8\s?5822\s?9FC7\s?DD38\s?854A\s?\s?E2D8\s?8D81\s?803C\s?0EBF\s?CD88"
 
         # User to manually compare keyid's
+        # If the key changes, review the following link for references to the new key:
+        # https://keyserver.ubuntu.com/pks/lookup?search=9DC858229FC7DD38854AE2D88D81803C0EBFCD88&fingerprint=on&op=index
         echo -e ""
         echo -e " Expected fingerprint = ${BOLD}9DC8 5822 9FC7 DD38 854A  E2D8 8D81 803C 0EBF CD88${RESET}"
         until [[ ${DOCKER_SIG_OK} =~ ^(y|n)$ ]]; do
@@ -234,6 +241,8 @@ function InstallMongoDBFromApt() {
         apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR/server-4.2.asc" 2>/dev/null | grep 'E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B'
 
         # User to manually compare keyid's
+        # If the key changes, review the following link for references to the new key:
+        # https://keyserver.ubuntu.com/pks/lookup?search=E162F504A20CDF15827F718D4B7C549A058F8B6B&fingerprint=on&op=index
         echo ""
         echo -e " Expected fingerprint = ${BOLD}E162 F504 A20C DF15 827F  718D 4B7C 549A 058F 8B6B${RESET}"
         until [[ ${MONGO_SIG_OK} =~ ^(y|n)$ ]]; do
@@ -286,7 +295,11 @@ function InstallZeekFromApt() {
     ZEEK_PATH="${zeek_path:-/opt/zeek}"
 
     if ! [ -e /etc/apt/trusted.gpg.d/security_zeek.gpg ]; then
+        # Check both of the following links for latest instructions on adding the repo:
+        # https://github.com/zeek/zeek-docs/blob/master/install.rst#binary-packages
         # https://software.opensuse.org/download.html?project=security%3Azeek&package=zeek
+        # Check here when the key signature changes for reference to the new key:
+        # https://keyserver.ubuntu.com/pks/lookup?search=E9690B2B7D8AC1A19F921C4AC68B494DF56ACC7E&fingerprint=on&op=index
         curl -fsSL "https://download.opensuse.org/repositories/security:zeek/xUbuntu_$UBUNTU_VERSION/Release.key" > "$SETUPDIR/zeek-release.key"
 
         apt-key adv --with-fingerprint --keyid-format long "$SETUPDIR"/zeek-release.key 2>/dev/null | grep 'AAF3 EB04 4C49 C402 A9E7  B9AE 69D1 B2AA EE3D 166A'
@@ -849,6 +862,31 @@ LOGS=$ZEEK_PATH/logs/current" > /etc/rita/rita.env
     sleep 5
 }
 
+function BettercapUIStatus() {
+    if [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
+        echo ""
+        echo "=====================[ Web UI Credentials ]========================="
+        echo -e "    ${BOLD}[http]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo -e "    ${BOLD}[http]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo ""
+        echo -e "    ${BOLD}[https]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
+        echo -e "    ${BOLD}[https]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
+	echo "===================================================================="
+        echo ""
+    fi
+}
+
+function UpdateCaplets() {
+
+    # Update caplets and web-ui
+    echo ""
+    echo -e "${BLUE}[*]Updating bettercap resources...${RESET}"
+    bettercap -eval "caplets.update; ui.update; q" || (echo "Error updating bettercap resources. Quitting." && exit 1)
+
+    sleep 2
+
+}
+
 function InstallBettercapFromRelease() {
 
     echo -e "${BLUE}[*]Installing bettercap from GitHub release...${RESET}"
@@ -906,32 +944,25 @@ function InstallBettercapFromRelease() {
     #sudo apt install libnetfiler-queue-dev
 
 
-    # Update caplets and web-ui
-    echo ""
-    echo -e "${BLUE}[*]Updating bettercap resources...${RESET}"
-    bettercap -eval "caplets.update; ui.update; q" || (echo "Error updating bettercap resources. Quitting." && exit 1)
+    UpdateCaplets
 
-    sleep 2 
     echo -e "${BLUE}[✓]Done.${RESET}"
 }
 
-function UpdateCredentials() {
+function ChangeBettercapDefaultCredentials() {
+
 	# Replace default http credentials if found
 	if ! [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
 		echo -e "${YELLOW}[i]http-ui.cap not found. Quitting...${RESET}"
 		exit 1
 	fi
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTP_CONF"); then
-		echo -e "${BLUE}[*]Replacing default http web interface credentials (user::pass)...${RESET}"
+		echo -e "${BLUE}[*]Changing bettercap http web interface credentials...${RESET}"
 		sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
 		sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
-		# Restart bettercap for http-ui to accept new credentials
-		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
-			systemctl restart bettercap-arp-antidote
-		fi
 	else
 		echo ""
-		echo -e "${BOLD}[i]http-ui credentials already randomized, current entries below.${RESET}"
+		echo -e "${BOLD}[i]http-ui credentials already randomized.${RESET}"
 	fi
 	# Replace default https credentials if found
 	if ! [ -e /usr/local/share/bettercap/caplets/https-ui.cap ]; then
@@ -939,17 +970,45 @@ function UpdateCredentials() {
 		exit 1
 	fi
 	if (grep -Eqx "^set api.rest.(username user|password pass)$" "$HTTPS_CONF"); then
-		echo -e "${BLUE}[*]Replacing default https web interface credentials (user::pass)...${RESET}"
+		echo -e "${BLUE}[*]Changing bettercap https web interface credentials...${RESET}"
 		sed -i 's/^set api.rest.password pass$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
 		sed -i 's/^set api.rest.username user$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
-		# Restart bettercap for https-ui to accept new credentials
-		if (systemctl is-active --quiet bettercap-arp-antidote.service); then
-			systemctl restart bettercap-arp-antidote
-		fi
 	else
 		echo ""
-		echo -e "${BOLD}[i]https-ui credentials already randomized, current entries below.${RESET}"
+		echo -e "${BOLD}[i]https-ui credentials already randomized.${RESET}"
 	fi
+
+	# Restart bettercap for ui to accept new credentials
+	if (systemctl is-active --quiet bettercap-arp-antidote.service); then
+		systemctl restart bettercap-arp-antidote
+	fi
+
+}
+
+function UpdateBettercapCredentials() {
+
+	if ! [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
+		echo -e "${YELLOW}[i]http-ui.cap not found. Quitting...${RESET}"
+		exit 1
+	fi
+	echo -e "${BLUE}[*]Changing bettercap http web interface credentials...${RESET}"
+	sed -i 's/^set api.rest.password .*$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+	sed -i 's/^set api.rest.username .*$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/http-ui.cap
+
+	if ! [ -e /usr/local/share/bettercap/caplets/https-ui.cap ]; then
+		echo -e "${YELLOW}[*]https-ui.cap not found. Quitting...${RESET}"
+		exit 1
+	fi
+	echo -e "${BLUE}[*]Changing bettercap https web interface credentials...${RESET}"
+	sed -i 's/^set api.rest.password .*$/set api.rest.password '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+	sed -i 's/^set api.rest.username .*$/set api.rest.username '"$(tr -dc '[:alnum:]' < /dev/urandom | fold -w 32 | head -n 1)"'/' /usr/local/share/bettercap/caplets/https-ui.cap
+
+	# Restart bettercap for ui to accept new credentials
+	if (systemctl is-active --quiet bettercap-arp-antidote.service); then
+		systemctl restart bettercap-arp-antidote
+	fi
+
+	BettercapUIStatus
 }
 
 
@@ -1679,20 +1738,6 @@ function MongoDBStatus() {
 	fi
 }
 
-function BettercapUIStatus() {
-    if [ -e /usr/local/share/bettercap/caplets/http-ui.cap ]; then
-        echo ""
-        echo "=====================[ Web UI Credentials ]========================="
-        echo -e "    ${BOLD}[http]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
-        echo -e "    ${BOLD}[http]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/http-ui.cap | cut -d ' ' -f 3)${RESET}"
-        echo ""
-        echo -e "    ${BOLD}[https]username: $(grep 'api.rest.username' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
-        echo -e "    ${BOLD}[https]password: $(grep 'api.rest.password' /usr/local/share/bettercap/caplets/https-ui.cap | cut -d ' ' -f 3)${RESET}"
-	echo "===================================================================="
-        echo ""
-    fi
-}
-
 function EchoStatus() {
 
 	# Final echo to terminal
@@ -1724,7 +1769,7 @@ function InstallBettercap() {
 
         InstallBettercapFromRelease
 
-        UpdateCredentials
+        ChangeBettercapDefaultCredentials
         CleanUp
         EchoStatus
     else
@@ -1972,11 +2017,12 @@ function ManageMenu() {
     echo -e "   6) Stop and disable the network visibility services"
     echo -e "   7) Remove firewall rules"
     echo -e "   8) Manage Cron Tasks"
-    echo -e "   9) Randomize the http(s)-ui credentials (after updating caplets)"
-    echo -e "  10) Uninstall network visibility services and optionally any installed packages"
+    echo -e "   9) Randomize the Bettercap http(s)-ui credentials"
+    echo -e "  10) Update Bettercap caplets"
+    echo -e "  11) Uninstall network visibility services and optionally any installed packages"
     echo -e "   0) Exit"
     until [[ $MENU_OPTION =~ ^([0-9]|10)$ ]]; do
-        read -rp "Select an option [1-10]: " MENU_OPTION
+        read -rp "Select an option [1-11]: " MENU_OPTION
     done
 
     case $MENU_OPTION in
@@ -2005,9 +2051,12 @@ function ManageMenu() {
         ManageCronTasks
         ;;
     9)
-        UpdateCredentials
+        UpdateBettercapCredentials
         ;;
     10)
+        UpdateCaplets
+        ;;
+    11)
         Uninstall
         ;;
     0)
